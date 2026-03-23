@@ -3,4 +3,6 @@
 /* eslint-disable */
 import type * as aaveAprProviderSol from "./AaveAprProvider.sol";
 export type { aaveAprProviderSol };
-export type { SUSDaiAprProvider } from "./SUSDaiAprProvider";
+import type * as susDaiAprPairProviderSol from "./SUSDaiAprPairProvider.sol";
+export type { susDaiAprPairProviderSol };
+export type { ERC4626AprProvider } from "./ERC4626AprProvider";

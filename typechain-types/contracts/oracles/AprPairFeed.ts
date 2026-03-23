@@ -23,87 +23,131 @@ import type {
   TypedContractMethod,
 } from "../../common";
 
+export declare namespace IAprPairFeed {
+  export type TRoundStruct = {
+    roundId: BigNumberish;
+    aprTarget: BigNumberish;
+    aprBase: BigNumberish;
+    timestamp: BigNumberish;
+  };
+
+  export type TRoundStructOutput = [
+    roundId: bigint,
+    aprTarget: bigint,
+    aprBase: bigint,
+    timestamp: bigint
+  ] & {
+    roundId: bigint;
+    aprTarget: bigint;
+    aprBase: bigint;
+    timestamp: bigint;
+  };
+}
+
 export interface AprPairFeedInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "acceptOwnership"
-      | "clearManualOverride"
-      | "getAprPair"
-      | "i_aaveProvider"
-      | "i_susdaiProvider"
-      | "owner"
-      | "pendingOwner"
-      | "renounceOwnership"
-      | "s_aprBase"
-      | "s_aprTarget"
-      | "s_lastUpdated"
-      | "s_manualAprBase"
-      | "s_manualAprTarget"
-      | "s_manualOverride"
+      | "APR_LOWER_BOUND"
+      | "APR_UPPER_BOUND"
+      | "DEFAULT_ADMIN_ROLE"
+      | "MAX_ROUNDS"
+      | "UPDATER_FEED_ROLE"
+      | "getRoleAdmin"
+      | "getRoundData"
+      | "grantRole"
+      | "hasRole"
+      | "i_provider"
+      | "latestRoundData"
+      | "renounceRole"
+      | "revokeRole"
+      | "s_currentRoundId"
+      | "s_oldestRoundId"
+      | "s_rounds"
+      | "s_sourcePref"
       | "s_staleAfter"
-      | "setManualApr"
+      | "setSourcePref"
       | "setStaleAfter"
-      | "transferOwnership"
-      | "updateRoundData"
+      | "supportsInterface"
+      | "updateRoundData()"
+      | "updateRoundData(int64,int64,uint64)"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
-      | "AprUpdated"
-      | "ManualOverrideCleared"
-      | "ManualOverrideSet"
-      | "OwnershipTransferStarted"
-      | "OwnershipTransferred"
+      | "RoleAdminChanged"
+      | "RoleGranted"
+      | "RoleRevoked"
+      | "RoundUpdated"
+      | "SourcePrefUpdated"
+      | "StaleAfterUpdated"
   ): EventFragment;
 
   encodeFunctionData(
-    functionFragment: "acceptOwnership",
+    functionFragment: "APR_LOWER_BOUND",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "clearManualOverride",
+    functionFragment: "APR_UPPER_BOUND",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "getAprPair",
+    functionFragment: "DEFAULT_ADMIN_ROLE",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "i_aaveProvider",
+    functionFragment: "MAX_ROUNDS",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "i_susdaiProvider",
-    values?: undefined
-  ): string;
-  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "pendingOwner",
+    functionFragment: "UPDATER_FEED_ROLE",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "renounceOwnership",
-    values?: undefined
-  ): string;
-  encodeFunctionData(functionFragment: "s_aprBase", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "s_aprTarget",
-    values?: undefined
+    functionFragment: "getRoleAdmin",
+    values: [BytesLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "s_lastUpdated",
+    functionFragment: "getRoundData",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "grantRole",
+    values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "hasRole",
+    values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "i_provider",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "s_manualAprBase",
+    functionFragment: "latestRoundData",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "s_manualAprTarget",
+    functionFragment: "renounceRole",
+    values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "revokeRole",
+    values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "s_currentRoundId",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "s_manualOverride",
+    functionFragment: "s_oldestRoundId",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "s_rounds",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "s_sourcePref",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -111,67 +155,74 @@ export interface AprPairFeedInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "setManualApr",
-    values: [BigNumberish, BigNumberish]
+    functionFragment: "setSourcePref",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "setStaleAfter",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "transferOwnership",
-    values: [AddressLike]
+    functionFragment: "supportsInterface",
+    values: [BytesLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "updateRoundData",
+    functionFragment: "updateRoundData()",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "updateRoundData(int64,int64,uint64)",
+    values: [BigNumberish, BigNumberish, BigNumberish]
   ): string;
 
   decodeFunctionResult(
-    functionFragment: "acceptOwnership",
+    functionFragment: "APR_LOWER_BOUND",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "clearManualOverride",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "getAprPair", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "i_aaveProvider",
+    functionFragment: "APR_UPPER_BOUND",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "i_susdaiProvider",
+    functionFragment: "DEFAULT_ADMIN_ROLE",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "MAX_ROUNDS", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "pendingOwner",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "renounceOwnership",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "s_aprBase", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "s_aprTarget",
+    functionFragment: "UPDATER_FEED_ROLE",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "s_lastUpdated",
+    functionFragment: "getRoleAdmin",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "s_manualAprBase",
+    functionFragment: "getRoundData",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "grantRole", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "hasRole", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "i_provider", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "latestRoundData",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "s_manualAprTarget",
+    functionFragment: "renounceRole",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "revokeRole", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "s_currentRoundId",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "s_manualOverride",
+    functionFragment: "s_oldestRoundId",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "s_rounds", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "s_sourcePref",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -179,7 +230,7 @@ export interface AprPairFeedInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "setManualApr",
+    functionFragment: "setSourcePref",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -187,27 +238,92 @@ export interface AprPairFeedInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "transferOwnership",
+    functionFragment: "supportsInterface",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "updateRoundData",
+    functionFragment: "updateRoundData()",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "updateRoundData(int64,int64,uint64)",
     data: BytesLike
   ): Result;
 }
 
-export namespace AprUpdatedEvent {
+export namespace RoleAdminChangedEvent {
   export type InputTuple = [
+    role: BytesLike,
+    previousAdminRole: BytesLike,
+    newAdminRole: BytesLike
+  ];
+  export type OutputTuple = [
+    role: string,
+    previousAdminRole: string,
+    newAdminRole: string
+  ];
+  export interface OutputObject {
+    role: string;
+    previousAdminRole: string;
+    newAdminRole: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RoleGrantedEvent {
+  export type InputTuple = [
+    role: BytesLike,
+    account: AddressLike,
+    sender: AddressLike
+  ];
+  export type OutputTuple = [role: string, account: string, sender: string];
+  export interface OutputObject {
+    role: string;
+    account: string;
+    sender: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RoleRevokedEvent {
+  export type InputTuple = [
+    role: BytesLike,
+    account: AddressLike,
+    sender: AddressLike
+  ];
+  export type OutputTuple = [role: string, account: string, sender: string];
+  export interface OutputObject {
+    role: string;
+    account: string;
+    sender: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RoundUpdatedEvent {
+  export type InputTuple = [
+    roundId: BigNumberish,
     aprTarget: BigNumberish,
     aprBase: BigNumberish,
     timestamp: BigNumberish
   ];
   export type OutputTuple = [
+    roundId: bigint,
     aprTarget: bigint,
     aprBase: bigint,
     timestamp: bigint
   ];
   export interface OutputObject {
+    roundId: bigint;
     aprTarget: bigint;
     aprBase: bigint;
     timestamp: bigint;
@@ -218,22 +334,11 @@ export namespace AprUpdatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace ManualOverrideClearedEvent {
-  export type InputTuple = [];
-  export type OutputTuple = [];
-  export interface OutputObject {}
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace ManualOverrideSetEvent {
-  export type InputTuple = [aprTarget: BigNumberish, aprBase: BigNumberish];
-  export type OutputTuple = [aprTarget: bigint, aprBase: bigint];
+export namespace SourcePrefUpdatedEvent {
+  export type InputTuple = [pref: BigNumberish];
+  export type OutputTuple = [pref: bigint];
   export interface OutputObject {
-    aprTarget: bigint;
-    aprBase: bigint;
+    pref: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -241,25 +346,11 @@ export namespace ManualOverrideSetEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace OwnershipTransferStartedEvent {
-  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
-  export type OutputTuple = [previousOwner: string, newOwner: string];
+export namespace StaleAfterUpdatedEvent {
+  export type InputTuple = [staleAfter: BigNumberish];
+  export type OutputTuple = [staleAfter: bigint];
   export interface OutputObject {
-    previousOwner: string;
-    newOwner: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace OwnershipTransferredEvent {
-  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
-  export type OutputTuple = [previousOwner: string, newOwner: string];
-  export interface OutputObject {
-    previousOwner: string;
-    newOwner: string;
+    staleAfter: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -310,42 +401,79 @@ export interface AprPairFeed extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  acceptOwnership: TypedContractMethod<[], [void], "nonpayable">;
+  APR_LOWER_BOUND: TypedContractMethod<[], [bigint], "view">;
 
-  clearManualOverride: TypedContractMethod<[], [void], "nonpayable">;
+  APR_UPPER_BOUND: TypedContractMethod<[], [bigint], "view">;
 
-  getAprPair: TypedContractMethod<
-    [],
-    [[bigint, bigint] & { aprTarget: bigint; aprBase: bigint }],
+  DEFAULT_ADMIN_ROLE: TypedContractMethod<[], [string], "view">;
+
+  MAX_ROUNDS: TypedContractMethod<[], [bigint], "view">;
+
+  UPDATER_FEED_ROLE: TypedContractMethod<[], [string], "view">;
+
+  getRoleAdmin: TypedContractMethod<[role: BytesLike], [string], "view">;
+
+  getRoundData: TypedContractMethod<
+    [roundId: BigNumberish],
+    [IAprPairFeed.TRoundStructOutput],
     "view"
   >;
 
-  i_aaveProvider: TypedContractMethod<[], [string], "view">;
+  grantRole: TypedContractMethod<
+    [role: BytesLike, account: AddressLike],
+    [void],
+    "nonpayable"
+  >;
 
-  i_susdaiProvider: TypedContractMethod<[], [string], "view">;
+  hasRole: TypedContractMethod<
+    [role: BytesLike, account: AddressLike],
+    [boolean],
+    "view"
+  >;
 
-  owner: TypedContractMethod<[], [string], "view">;
+  i_provider: TypedContractMethod<[], [string], "view">;
 
-  pendingOwner: TypedContractMethod<[], [string], "view">;
+  latestRoundData: TypedContractMethod<
+    [],
+    [IAprPairFeed.TRoundStructOutput],
+    "nonpayable"
+  >;
 
-  renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
+  renounceRole: TypedContractMethod<
+    [role: BytesLike, callerConfirmation: AddressLike],
+    [void],
+    "nonpayable"
+  >;
 
-  s_aprBase: TypedContractMethod<[], [bigint], "view">;
+  revokeRole: TypedContractMethod<
+    [role: BytesLike, account: AddressLike],
+    [void],
+    "nonpayable"
+  >;
 
-  s_aprTarget: TypedContractMethod<[], [bigint], "view">;
+  s_currentRoundId: TypedContractMethod<[], [bigint], "view">;
 
-  s_lastUpdated: TypedContractMethod<[], [bigint], "view">;
+  s_oldestRoundId: TypedContractMethod<[], [bigint], "view">;
 
-  s_manualAprBase: TypedContractMethod<[], [bigint], "view">;
+  s_rounds: TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [bigint, bigint, bigint, bigint] & {
+        roundId: bigint;
+        aprTarget: bigint;
+        aprBase: bigint;
+        timestamp: bigint;
+      }
+    ],
+    "view"
+  >;
 
-  s_manualAprTarget: TypedContractMethod<[], [bigint], "view">;
-
-  s_manualOverride: TypedContractMethod<[], [boolean], "view">;
+  s_sourcePref: TypedContractMethod<[], [bigint], "view">;
 
   s_staleAfter: TypedContractMethod<[], [bigint], "view">;
 
-  setManualApr: TypedContractMethod<
-    [aprTarget_: BigNumberish, aprBase_: BigNumberish],
+  setSourcePref: TypedContractMethod<
+    [pref: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -356,174 +484,237 @@ export interface AprPairFeed extends BaseContract {
     "nonpayable"
   >;
 
-  transferOwnership: TypedContractMethod<
-    [newOwner: AddressLike],
+  supportsInterface: TypedContractMethod<
+    [interfaceId: BytesLike],
+    [boolean],
+    "view"
+  >;
+
+  "updateRoundData()": TypedContractMethod<[], [void], "nonpayable">;
+
+  "updateRoundData(int64,int64,uint64)": TypedContractMethod<
+    [aprTarget: BigNumberish, aprBase: BigNumberish, timestamp: BigNumberish],
     [void],
     "nonpayable"
   >;
-
-  updateRoundData: TypedContractMethod<[], [void], "nonpayable">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
   getFunction(
-    nameOrSignature: "acceptOwnership"
-  ): TypedContractMethod<[], [void], "nonpayable">;
+    nameOrSignature: "APR_LOWER_BOUND"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "clearManualOverride"
-  ): TypedContractMethod<[], [void], "nonpayable">;
+    nameOrSignature: "APR_UPPER_BOUND"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "getAprPair"
+    nameOrSignature: "DEFAULT_ADMIN_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "MAX_ROUNDS"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "UPDATER_FEED_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "getRoleAdmin"
+  ): TypedContractMethod<[role: BytesLike], [string], "view">;
+  getFunction(
+    nameOrSignature: "getRoundData"
   ): TypedContractMethod<
-    [],
-    [[bigint, bigint] & { aprTarget: bigint; aprBase: bigint }],
+    [roundId: BigNumberish],
+    [IAprPairFeed.TRoundStructOutput],
     "view"
   >;
   getFunction(
-    nameOrSignature: "i_aaveProvider"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "i_susdaiProvider"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "owner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "pendingOwner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "renounceOwnership"
-  ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "s_aprBase"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_aprTarget"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_lastUpdated"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_manualAprBase"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_manualAprTarget"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_manualOverride"
-  ): TypedContractMethod<[], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "s_staleAfter"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "setManualApr"
+    nameOrSignature: "grantRole"
   ): TypedContractMethod<
-    [aprTarget_: BigNumberish, aprBase_: BigNumberish],
+    [role: BytesLike, account: AddressLike],
     [void],
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "hasRole"
+  ): TypedContractMethod<
+    [role: BytesLike, account: AddressLike],
+    [boolean],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "i_provider"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "latestRoundData"
+  ): TypedContractMethod<[], [IAprPairFeed.TRoundStructOutput], "nonpayable">;
+  getFunction(
+    nameOrSignature: "renounceRole"
+  ): TypedContractMethod<
+    [role: BytesLike, callerConfirmation: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "revokeRole"
+  ): TypedContractMethod<
+    [role: BytesLike, account: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "s_currentRoundId"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "s_oldestRoundId"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "s_rounds"
+  ): TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [bigint, bigint, bigint, bigint] & {
+        roundId: bigint;
+        aprTarget: bigint;
+        aprBase: bigint;
+        timestamp: bigint;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "s_sourcePref"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "s_staleAfter"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "setSourcePref"
+  ): TypedContractMethod<[pref: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "setStaleAfter"
   ): TypedContractMethod<[staleAfter_: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "transferOwnership"
-  ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
+    nameOrSignature: "supportsInterface"
+  ): TypedContractMethod<[interfaceId: BytesLike], [boolean], "view">;
   getFunction(
-    nameOrSignature: "updateRoundData"
+    nameOrSignature: "updateRoundData()"
   ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "updateRoundData(int64,int64,uint64)"
+  ): TypedContractMethod<
+    [aprTarget: BigNumberish, aprBase: BigNumberish, timestamp: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   getEvent(
-    key: "AprUpdated"
+    key: "RoleAdminChanged"
   ): TypedContractEvent<
-    AprUpdatedEvent.InputTuple,
-    AprUpdatedEvent.OutputTuple,
-    AprUpdatedEvent.OutputObject
+    RoleAdminChangedEvent.InputTuple,
+    RoleAdminChangedEvent.OutputTuple,
+    RoleAdminChangedEvent.OutputObject
   >;
   getEvent(
-    key: "ManualOverrideCleared"
+    key: "RoleGranted"
   ): TypedContractEvent<
-    ManualOverrideClearedEvent.InputTuple,
-    ManualOverrideClearedEvent.OutputTuple,
-    ManualOverrideClearedEvent.OutputObject
+    RoleGrantedEvent.InputTuple,
+    RoleGrantedEvent.OutputTuple,
+    RoleGrantedEvent.OutputObject
   >;
   getEvent(
-    key: "ManualOverrideSet"
+    key: "RoleRevoked"
   ): TypedContractEvent<
-    ManualOverrideSetEvent.InputTuple,
-    ManualOverrideSetEvent.OutputTuple,
-    ManualOverrideSetEvent.OutputObject
+    RoleRevokedEvent.InputTuple,
+    RoleRevokedEvent.OutputTuple,
+    RoleRevokedEvent.OutputObject
   >;
   getEvent(
-    key: "OwnershipTransferStarted"
+    key: "RoundUpdated"
   ): TypedContractEvent<
-    OwnershipTransferStartedEvent.InputTuple,
-    OwnershipTransferStartedEvent.OutputTuple,
-    OwnershipTransferStartedEvent.OutputObject
+    RoundUpdatedEvent.InputTuple,
+    RoundUpdatedEvent.OutputTuple,
+    RoundUpdatedEvent.OutputObject
   >;
   getEvent(
-    key: "OwnershipTransferred"
+    key: "SourcePrefUpdated"
   ): TypedContractEvent<
-    OwnershipTransferredEvent.InputTuple,
-    OwnershipTransferredEvent.OutputTuple,
-    OwnershipTransferredEvent.OutputObject
+    SourcePrefUpdatedEvent.InputTuple,
+    SourcePrefUpdatedEvent.OutputTuple,
+    SourcePrefUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "StaleAfterUpdated"
+  ): TypedContractEvent<
+    StaleAfterUpdatedEvent.InputTuple,
+    StaleAfterUpdatedEvent.OutputTuple,
+    StaleAfterUpdatedEvent.OutputObject
   >;
 
   filters: {
-    "AprUpdated(uint256,uint256,uint256)": TypedContractEvent<
-      AprUpdatedEvent.InputTuple,
-      AprUpdatedEvent.OutputTuple,
-      AprUpdatedEvent.OutputObject
+    "RoleAdminChanged(bytes32,bytes32,bytes32)": TypedContractEvent<
+      RoleAdminChangedEvent.InputTuple,
+      RoleAdminChangedEvent.OutputTuple,
+      RoleAdminChangedEvent.OutputObject
     >;
-    AprUpdated: TypedContractEvent<
-      AprUpdatedEvent.InputTuple,
-      AprUpdatedEvent.OutputTuple,
-      AprUpdatedEvent.OutputObject
-    >;
-
-    "ManualOverrideCleared()": TypedContractEvent<
-      ManualOverrideClearedEvent.InputTuple,
-      ManualOverrideClearedEvent.OutputTuple,
-      ManualOverrideClearedEvent.OutputObject
-    >;
-    ManualOverrideCleared: TypedContractEvent<
-      ManualOverrideClearedEvent.InputTuple,
-      ManualOverrideClearedEvent.OutputTuple,
-      ManualOverrideClearedEvent.OutputObject
+    RoleAdminChanged: TypedContractEvent<
+      RoleAdminChangedEvent.InputTuple,
+      RoleAdminChangedEvent.OutputTuple,
+      RoleAdminChangedEvent.OutputObject
     >;
 
-    "ManualOverrideSet(uint256,uint256)": TypedContractEvent<
-      ManualOverrideSetEvent.InputTuple,
-      ManualOverrideSetEvent.OutputTuple,
-      ManualOverrideSetEvent.OutputObject
+    "RoleGranted(bytes32,address,address)": TypedContractEvent<
+      RoleGrantedEvent.InputTuple,
+      RoleGrantedEvent.OutputTuple,
+      RoleGrantedEvent.OutputObject
     >;
-    ManualOverrideSet: TypedContractEvent<
-      ManualOverrideSetEvent.InputTuple,
-      ManualOverrideSetEvent.OutputTuple,
-      ManualOverrideSetEvent.OutputObject
-    >;
-
-    "OwnershipTransferStarted(address,address)": TypedContractEvent<
-      OwnershipTransferStartedEvent.InputTuple,
-      OwnershipTransferStartedEvent.OutputTuple,
-      OwnershipTransferStartedEvent.OutputObject
-    >;
-    OwnershipTransferStarted: TypedContractEvent<
-      OwnershipTransferStartedEvent.InputTuple,
-      OwnershipTransferStartedEvent.OutputTuple,
-      OwnershipTransferStartedEvent.OutputObject
+    RoleGranted: TypedContractEvent<
+      RoleGrantedEvent.InputTuple,
+      RoleGrantedEvent.OutputTuple,
+      RoleGrantedEvent.OutputObject
     >;
 
-    "OwnershipTransferred(address,address)": TypedContractEvent<
-      OwnershipTransferredEvent.InputTuple,
-      OwnershipTransferredEvent.OutputTuple,
-      OwnershipTransferredEvent.OutputObject
+    "RoleRevoked(bytes32,address,address)": TypedContractEvent<
+      RoleRevokedEvent.InputTuple,
+      RoleRevokedEvent.OutputTuple,
+      RoleRevokedEvent.OutputObject
     >;
-    OwnershipTransferred: TypedContractEvent<
-      OwnershipTransferredEvent.InputTuple,
-      OwnershipTransferredEvent.OutputTuple,
-      OwnershipTransferredEvent.OutputObject
+    RoleRevoked: TypedContractEvent<
+      RoleRevokedEvent.InputTuple,
+      RoleRevokedEvent.OutputTuple,
+      RoleRevokedEvent.OutputObject
+    >;
+
+    "RoundUpdated(uint64,int64,int64,uint64)": TypedContractEvent<
+      RoundUpdatedEvent.InputTuple,
+      RoundUpdatedEvent.OutputTuple,
+      RoundUpdatedEvent.OutputObject
+    >;
+    RoundUpdated: TypedContractEvent<
+      RoundUpdatedEvent.InputTuple,
+      RoundUpdatedEvent.OutputTuple,
+      RoundUpdatedEvent.OutputObject
+    >;
+
+    "SourcePrefUpdated(uint8)": TypedContractEvent<
+      SourcePrefUpdatedEvent.InputTuple,
+      SourcePrefUpdatedEvent.OutputTuple,
+      SourcePrefUpdatedEvent.OutputObject
+    >;
+    SourcePrefUpdated: TypedContractEvent<
+      SourcePrefUpdatedEvent.InputTuple,
+      SourcePrefUpdatedEvent.OutputTuple,
+      SourcePrefUpdatedEvent.OutputObject
+    >;
+
+    "StaleAfterUpdated(uint256)": TypedContractEvent<
+      StaleAfterUpdatedEvent.InputTuple,
+      StaleAfterUpdatedEvent.OutputTuple,
+      StaleAfterUpdatedEvent.OutputObject
+    >;
+    StaleAfterUpdated: TypedContractEvent<
+      StaleAfterUpdatedEvent.InputTuple,
+      StaleAfterUpdatedEvent.OutputTuple,
+      StaleAfterUpdatedEvent.OutputObject
     >;
   };
 }

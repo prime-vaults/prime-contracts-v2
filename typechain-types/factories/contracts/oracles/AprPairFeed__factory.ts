@@ -9,6 +9,7 @@ import {
 } from "ethers";
 import type {
   Signer,
+  BigNumberish,
   AddressLike,
   ContractDeployTransaction,
   ContractRunner,
@@ -24,32 +25,26 @@ const _abi = [
     inputs: [
       {
         internalType: "address",
-        name: "aaveProvider_",
+        name: "provider_",
         type: "address",
       },
       {
         internalType: "address",
-        name: "susdaiProvider_",
+        name: "admin_",
         type: "address",
       },
       {
-        internalType: "address",
-        name: "owner_",
-        type: "address",
+        internalType: "uint256",
+        name: "staleAfter_",
+        type: "uint256",
       },
     ],
     stateMutability: "nonpayable",
     type: "constructor",
   },
   {
-    inputs: [
-      {
-        internalType: "address",
-        name: "owner",
-        type: "address",
-      },
-    ],
-    name: "OwnableInvalidOwner",
+    inputs: [],
+    name: "AccessControlBadConfirmation",
     type: "error",
   },
   {
@@ -59,278 +54,519 @@ const _abi = [
         name: "account",
         type: "address",
       },
+      {
+        internalType: "bytes32",
+        name: "neededRole",
+        type: "bytes32",
+      },
     ],
-    name: "OwnableUnauthorizedAccount",
+    name: "AccessControlUnauthorizedAccount",
     type: "error",
   },
   {
     inputs: [
       {
-        internalType: "uint256",
-        name: "lastUpdated",
-        type: "uint256",
+        internalType: "int64",
+        name: "value",
+        type: "int64",
       },
       {
+        internalType: "int64",
+        name: "lower",
+        type: "int64",
+      },
+      {
+        internalType: "int64",
+        name: "upper",
+        type: "int64",
+      },
+    ],
+    name: "PrimeVaults__AprOutOfBounds",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "PrimeVaults__NoRoundData",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint64",
+        name: "roundId",
+        type: "uint64",
+      },
+    ],
+    name: "PrimeVaults__RoundNotAvailable",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint64",
+        name: "provided",
+        type: "uint64",
+      },
+      {
+        internalType: "uint64",
+        name: "lastStored",
+        type: "uint64",
+      },
+    ],
+    name: "PrimeVaults__TimestampOutOfOrder",
+    type: "error",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "previousAdminRole",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "newAdminRole",
+        type: "bytes32",
+      },
+    ],
+    name: "RoleAdminChanged",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
+    ],
+    name: "RoleGranted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
+    ],
+    name: "RoleRevoked",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint64",
+        name: "roundId",
+        type: "uint64",
+      },
+      {
+        indexed: false,
+        internalType: "int64",
+        name: "aprTarget",
+        type: "int64",
+      },
+      {
+        indexed: false,
+        internalType: "int64",
+        name: "aprBase",
+        type: "int64",
+      },
+      {
+        indexed: false,
+        internalType: "uint64",
+        name: "timestamp",
+        type: "uint64",
+      },
+    ],
+    name: "RoundUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "enum IAprPairFeed.ESourcePref",
+        name: "pref",
+        type: "uint8",
+      },
+    ],
+    name: "SourcePrefUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
         internalType: "uint256",
         name: "staleAfter",
         type: "uint256",
       },
     ],
-    name: "PrimeVaults__StaleApr",
-    type: "error",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "aprTarget",
-        type: "uint256",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "aprBase",
-        type: "uint256",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "timestamp",
-        type: "uint256",
-      },
-    ],
-    name: "AprUpdated",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [],
-    name: "ManualOverrideCleared",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "aprTarget",
-        type: "uint256",
-      },
-      {
-        indexed: false,
-        internalType: "uint256",
-        name: "aprBase",
-        type: "uint256",
-      },
-    ],
-    name: "ManualOverrideSet",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
-        internalType: "address",
-        name: "previousOwner",
-        type: "address",
-      },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "newOwner",
-        type: "address",
-      },
-    ],
-    name: "OwnershipTransferStarted",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
-        internalType: "address",
-        name: "previousOwner",
-        type: "address",
-      },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "newOwner",
-        type: "address",
-      },
-    ],
-    name: "OwnershipTransferred",
+    name: "StaleAfterUpdated",
     type: "event",
   },
   {
     inputs: [],
-    name: "acceptOwnership",
+    name: "APR_LOWER_BOUND",
+    outputs: [
+      {
+        internalType: "int64",
+        name: "",
+        type: "int64",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "APR_UPPER_BOUND",
+    outputs: [
+      {
+        internalType: "int64",
+        name: "",
+        type: "int64",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "DEFAULT_ADMIN_ROLE",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "MAX_ROUNDS",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "UPDATER_FEED_ROLE",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+    ],
+    name: "getRoleAdmin",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint64",
+        name: "roundId",
+        type: "uint64",
+      },
+    ],
+    name: "getRoundData",
+    outputs: [
+      {
+        components: [
+          {
+            internalType: "uint64",
+            name: "roundId",
+            type: "uint64",
+          },
+          {
+            internalType: "int64",
+            name: "aprTarget",
+            type: "int64",
+          },
+          {
+            internalType: "int64",
+            name: "aprBase",
+            type: "int64",
+          },
+          {
+            internalType: "uint64",
+            name: "timestamp",
+            type: "uint64",
+          },
+        ],
+        internalType: "struct IAprPairFeed.TRound",
+        name: "round",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "grantRole",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
   },
   {
-    inputs: [],
-    name: "clearManualOverride",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "getAprPair",
-    outputs: [
+    inputs: [
       {
-        internalType: "uint256",
-        name: "aprTarget",
-        type: "uint256",
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
       },
-      {
-        internalType: "uint256",
-        name: "aprBase",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "i_aaveProvider",
-    outputs: [
-      {
-        internalType: "contract AaveAprProvider",
-        name: "",
-        type: "address",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "i_susdaiProvider",
-    outputs: [
-      {
-        internalType: "contract SUSDaiAprProvider",
-        name: "",
-        type: "address",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "owner",
-    outputs: [
       {
         internalType: "address",
-        name: "",
+        name: "account",
         type: "address",
       },
     ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "pendingOwner",
-    outputs: [
-      {
-        internalType: "address",
-        name: "",
-        type: "address",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "renounceOwnership",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "s_aprBase",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "s_aprTarget",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "s_lastUpdated",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "s_manualAprBase",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "s_manualAprTarget",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "s_manualOverride",
+    name: "hasRole",
     outputs: [
       {
         internalType: "bool",
         name: "",
         type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "i_provider",
+    outputs: [
+      {
+        internalType: "contract IStrategyAprPairProvider",
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "latestRoundData",
+    outputs: [
+      {
+        components: [
+          {
+            internalType: "uint64",
+            name: "roundId",
+            type: "uint64",
+          },
+          {
+            internalType: "int64",
+            name: "aprTarget",
+            type: "int64",
+          },
+          {
+            internalType: "int64",
+            name: "aprBase",
+            type: "int64",
+          },
+          {
+            internalType: "uint64",
+            name: "timestamp",
+            type: "uint64",
+          },
+        ],
+        internalType: "struct IAprPairFeed.TRound",
+        name: "round",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "callerConfirmation",
+        type: "address",
+      },
+    ],
+    name: "renounceRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "revokeRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "s_currentRoundId",
+    outputs: [
+      {
+        internalType: "uint64",
+        name: "",
+        type: "uint64",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "s_oldestRoundId",
+    outputs: [
+      {
+        internalType: "uint64",
+        name: "",
+        type: "uint64",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "s_rounds",
+    outputs: [
+      {
+        internalType: "uint64",
+        name: "roundId",
+        type: "uint64",
+      },
+      {
+        internalType: "int64",
+        name: "aprTarget",
+        type: "int64",
+      },
+      {
+        internalType: "int64",
+        name: "aprBase",
+        type: "int64",
+      },
+      {
+        internalType: "uint64",
+        name: "timestamp",
+        type: "uint64",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "s_sourcePref",
+    outputs: [
+      {
+        internalType: "enum IAprPairFeed.ESourcePref",
+        name: "",
+        type: "uint8",
       },
     ],
     stateMutability: "view",
@@ -352,17 +588,12 @@ const _abi = [
   {
     inputs: [
       {
-        internalType: "uint256",
-        name: "aprTarget_",
-        type: "uint256",
-      },
-      {
-        internalType: "uint256",
-        name: "aprBase_",
-        type: "uint256",
+        internalType: "enum IAprPairFeed.ESourcePref",
+        name: "pref",
+        type: "uint8",
       },
     ],
-    name: "setManualApr",
+    name: "setSourcePref",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -383,14 +614,20 @@ const _abi = [
   {
     inputs: [
       {
-        internalType: "address",
-        name: "newOwner",
-        type: "address",
+        internalType: "bytes4",
+        name: "interfaceId",
+        type: "bytes4",
       },
     ],
-    name: "transferOwnership",
-    outputs: [],
-    stateMutability: "nonpayable",
+    name: "supportsInterface",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
     type: "function",
   },
   {
@@ -400,10 +637,33 @@ const _abi = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  {
+    inputs: [
+      {
+        internalType: "int64",
+        name: "aprTarget",
+        type: "int64",
+      },
+      {
+        internalType: "int64",
+        name: "aprBase",
+        type: "int64",
+      },
+      {
+        internalType: "uint64",
+        name: "timestamp",
+        type: "uint64",
+      },
+    ],
+    name: "updateRoundData",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
 ] as const;
 
 const _bytecode =
-  "0x60c060405234801561001057600080fd5b506040516108be3803806108be83398101604081905261002f9161010f565b806001600160a01b03811661005e57604051631e4fbdf760e01b81526000600482015260240160405180910390fd5b61006781610087565b50506001600160a01b039182166080521660a0526202a300600555610152565b600180546001600160a01b03191690556100a0816100a3565b50565b600080546001600160a01b038381166001600160a01b0319831681178455604051919092169283917f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e09190a35050565b80516001600160a01b038116811461010a57600080fd5b919050565b60008060006060848603121561012457600080fd5b61012d846100f3565b925061013b602085016100f3565b9150610149604085016100f3565b90509250925092565b60805160a051610739610185600039600081816101c7015261033b01526000818161025301526102b301526107396000f3fe608060405234801561001057600080fd5b50600436106101215760003560e01c8063963eeeb4116100ad578063d505a48811610071578063d505a4881461022b578063d6b4a4f614610234578063e30c39781461023d578063e74353381461024e578063f2fde38b1461027557600080fd5b8063963eeeb4146101c257806397f1a078146101e9578063a85701af146101fc578063c2011c9c14610205578063d1c1ece61461020e57600080fd5b8063605b7fad116100f4578063605b7fad1461017c578063715018a614610184578063785050771461018c57806379ba5097146101955780638da5cb5b1461019d57600080fd5b80630a94f1aa146101265780631c85133e1461013b57806321e541dd1461015757806345c703e71461015f575b600080fd5b610139610134366004610658565b610288565b005b61014460035481565b6040519081526020015b60405180910390f35b610139610295565b61016761040f565b6040805192835260208301919091520161014e565b610139610465565b6101396104a2565b61014460045481565b6101396104b6565b6000546001600160a01b03165b6040516001600160a01b03909116815260200161014e565b6101aa7f000000000000000000000000000000000000000000000000000000000000000081565b6101396101f7366004610671565b6104fa565b61014460055481565b61014460025481565b60065461021b9060ff1681565b604051901515815260200161014e565b61014460085481565b61014460075481565b6001546001600160a01b03166101aa565b6101aa7f000000000000000000000000000000000000000000000000000000000000000081565b610139610283366004610693565b610556565b6102906105c7565b600555565b60065460ff16156102b1576007546002556008546003556103bf565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316633dd999366040518163ffffffff1660e01b8152600401602060405180830381865afa15801561030f573d6000803e3d6000fd5b505050506040513d601f19601f8201168201806040525081019061033391906106c3565b6002819055507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316636472f9cb6040518163ffffffff1660e01b8152600401602060405180830381865afa158015610397573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906103bb91906106c3565b6003555b4260048190556002546003546040805192835260208301919091528101919091527f1d80185a32051c8fb114a7a1c10bbdb0cfc70daab04a688fdaca13146d258b7d9060600160405180910390a1565b6000806005546004544261042391906106dc565b11156104595760048054600554604051633ae7aac760e11b81526104509301918252602082015260400190565b60405180910390fd5b50506002546003549091565b61046d6105c7565b6006805460ff191690556040517f60419cb99f87f1127c670e49557aa0f606a66e9c298f968adccb76809256aa0890600090a1565b6104aa6105c7565b6104b460006105f4565b565b60015433906001600160a01b031681146104ee5760405163118cdaa760e01b81526001600160a01b0382166004820152602401610450565b6104f7816105f4565b50565b6105026105c7565b6006805460ff191660011790556007829055600881905560408051838152602081018390527ff28a6a0848e98ec6d329b0c0e09a83fe840029865ec9bd8272bd94aba4b0e5af910160405180910390a15050565b61055e6105c7565b600180546001600160a01b0383166001600160a01b0319909116811790915561058f6000546001600160a01b031690565b6001600160a01b03167f38d16b8cac22d99fc7c124b9cd0de2d3fa1faef420bfe791d8c362d765e2270060405160405180910390a350565b6000546001600160a01b031633146104b45760405163118cdaa760e01b8152336004820152602401610450565b600180546001600160a01b03191690556104f781600080546001600160a01b038381166001600160a01b0319831681178455604051919092169283917f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e09190a35050565b60006020828403121561066a57600080fd5b5035919050565b6000806040838503121561068457600080fd5b50508035926020909101359150565b6000602082840312156106a557600080fd5b81356001600160a01b03811681146106bc57600080fd5b9392505050565b6000602082840312156106d557600080fd5b5051919050565b818103818111156106fd57634e487b7160e01b600052601160045260246000fd5b9291505056fea264697066735822122014a44ec09ebd91ff44f19d7f0fa57ffb83fdc98757650caf9dbb8e5e4d838e5364736f6c63430008180033";
+  "0x60a06040523480156200001157600080fd5b506040516200140338038062001403833981016040819052620000349162000163565b6001600160a01b03831660805260168190556015805460ff60801b191690556200006060008362000097565b506200008d7f2c85ecd23ea927ba843f342b5bafa7879dfdc212a00052897f68d65c2ee8491b8362000097565b50505050620001a4565b6000828152602081815260408083206001600160a01b038516845290915281205460ff166200013c576000838152602081815260408083206001600160a01b03861684529091529020805460ff19166001179055620000f33390565b6001600160a01b0316826001600160a01b0316847f2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d60405160405180910390a450600162000140565b5060005b92915050565b80516001600160a01b03811681146200015e57600080fd5b919050565b6000806000606084860312156200017957600080fd5b620001848462000146565b9250620001946020850162000146565b9150604084015190509250925092565b60805161122e620001d5600039600081816102ff015281816104aa0152818161089e0152610a36015261122e6000f3fe608060405234801561001057600080fd5b506004361061014d5760003560e01c806376a5af19116100c3578063a85701af1161007c578063a85701af146102f1578063b975645e146102fa578063d547741f14610339578063e4b92d3a1461034c578063f921e65c14610394578063feaf968c146103f257600080fd5b806376a5af191461026f578063814eaad5146102825780638f3cc657146102a257806391d14854146102c95780639af53866146102dc578063a217fddf146102e957600080fd5b8063248a9ca311610115578063248a9ca3146101dc5780632f2ff15d1461020d57806331d0dfc91461022057806336568abe1461023357806341d35582146102465780636f24ec321461024e57600080fd5b806301ffc9a7146101525780630a94f1aa1461017a5780631f1ef1961461018f57806321e541dd146101c15780632317705f146101c9575b600080fd5b610165610160366004610f77565b6103fa565b60405190151581526020015b60405180910390f35b61018d610188366004610fa8565b610431565b005b6015546101a990600160401b90046001600160401b031681565b6040516001600160401b039091168152602001610171565b61018d610479565b61018d6101d7366004610fe5565b61055e565b6101ff6101ea366004610fa8565b60009081526020819052604090206001015490565b604051908152602001610171565b61018d61021b366004611030565b6105ae565b61018d61022e36600461106c565b6105d3565b61018d610241366004611030565b610637565b6101ff601481565b60155461026290600160801b900460ff1681565b60405161017191906110a3565b6015546101a9906001600160401b031681565b61028f6501d1a94a200081565b60405160079190910b8152602001610171565b6101ff7f2c85ecd23ea927ba843f342b5bafa7879dfdc212a00052897f68d65c2ee8491b81565b6101656102d7366004611030565b61066f565b61028f64746a5287ff1981565b6101ff600081565b6101ff60165481565b6103217f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b039091168152602001610171565b61018d610347366004611030565b610698565b61035f61035a366004610fa8565b6106bd565b604080516001600160401b039586168152600794850b60208201529290930b9282019290925291166060820152608001610171565b6103a76103a23660046110cb565b610700565b604051610171919060006080820190506001600160401b03808451168352602084015160070b6020840152604084015160070b60408401528060608501511660608401525092915050565b6103a761084e565b60006001600160e01b03198216637965db0b60e01b148061042b57506301ffc9a760e01b6001600160e01b03198316145b92915050565b600061043c81610af8565b60168290556040518281527f5823f30480c58b4687973da6560e422110dfab43c0f39cc9f495f41c9b31a14f906020015b60405180910390a15050565b7f2c85ecd23ea927ba843f342b5bafa7879dfdc212a00052897f68d65c2ee8491b6104a381610af8565b60008060007f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03166345c703e76040518163ffffffff1660e01b81526004016060604051808303816000875af1158015610508573d6000803e3d6000fd5b505050506040513d601f19601f8201168201806040525081019061052c91906110e8565b92509250925061053b83610b05565b61054482610b05565b61054d81610b62565b610558838383610c05565b50505050565b7f2c85ecd23ea927ba843f342b5bafa7879dfdc212a00052897f68d65c2ee8491b61058881610af8565b61059184610b05565b61059a83610b05565b6105a382610b62565b610558848484610c05565b6000828152602081905260409020600101546105c981610af8565b6105588383610e3d565b60006105de81610af8565b6015805483919060ff60801b1916600160801b8360018111156106035761060361108d565b02179055507f86a355d2700836fff59f6116c3ff43829b82921ff4ad5420900b4b1fcf656e728260405161046d91906110a3565b6001600160a01b03811633146106605760405163334bd91960e11b815260040160405180910390fd5b61066a8282610ecf565b505050565b6000918252602082815260408084206001600160a01b0393909316845291905290205460ff1690565b6000828152602081905260409020600101546106b381610af8565b6105588383610ecf565b600181601481106106cd57600080fd5b01546001600160401b038082169250600160401b8204600790810b92600160801b810490910b91600160c01b9091041684565b6040805160808101825260008082526020820181905291810182905260608101919091526001600160401b038216158061074857506015546001600160401b03908116908316115b8061076857506015546001600160401b03600160401b9091048116908316105b156107965760405163575d6f2360e11b81526001600160401b03831660048201526024015b60405180910390fd5b600060146107a5600185611140565b6001600160401b03166107b89190611167565b9050600181601481106107cd576107cd611189565b6040805160808101825291909201546001600160401b03808216808452600160401b8304600790810b6020860152600160801b8404900b94840194909452600160c01b909104811660608301529093508416146108485760405163575d6f2360e11b81526001600160401b038416600482015260240161078d565b50919050565b6040805160808101825260008082526020820181905291810182905260608101919091526001601554600160801b900460ff1660018111156108925761089261108d565b0361095b5760008060007f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03166345c703e76040518163ffffffff1660e01b81526004016060604051808303816000875af11580156108fc573d6000803e3d6000fd5b505050506040513d601f19601f8201168201806040525081019061092091906110e8565b6040805160808101825260008152600794850b60208201529290930b928201929092526001600160401b039091166060820152949350505050565b6015546001600160401b03166000036109875760405163a9d9a38f60e01b815260040160405180910390fd5b6015546000906014906109a5906001906001600160401b0316611140565b6001600160401b03166109b89190611167565b9050600181601481106109cd576109cd611189565b6040805160808101825292909101546001600160401b038082168452600160401b8204600790810b6020860152600160801b8304900b92840192909252600160c01b90041660608201819052601654919350610a29904261119f565b1115610af45760008060007f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03166345c703e76040518163ffffffff1660e01b81526004016060604051808303816000875af1158015610a94573d6000803e3d6000fd5b505050506040513d601f19601f82011682018060405250810190610ab891906110e8565b6040805160808101825260008152600794850b60208201529290930b928201929092526001600160401b03909116606082015295945050505050565b5090565b610b028133610f3a565b50565b64746a5287ff19600782900b1280610b2657506501d1a94a2000600782900b135b15610b02576040516357dd0bd960e01b8152600782900b600482015264746a5287ff1960248201526501d1a94a2000604482015260640161078d565b6015546001600160401b031615610b0257601554600090601490610b91906001906001600160401b0316611140565b6001600160401b0316610ba49190611167565b9050600060018260148110610bbb57610bbb611189565b01546001600160401b03600160c01b909104811691508316811061066a576040516375e23c1160e11b81526001600160401b0380851660048301528216602482015260440161078d565b601580546001600160401b0316906000610c1e836111b2565b91906101000a8154816001600160401b0302191690836001600160401b0316021790555050600060146001601560009054906101000a90046001600160401b0316610c699190611140565b6001600160401b0316610c7c9190611167565b604080516080810182526015546001600160401b039081168252600788810b602084015287900b92820192909252908416606082015290915060018260148110610cc857610cc8611189565b825191018054602084015160408501516060909501516001600160401b03908116600160c01b026001600160c01b03968216600160801b02969096166fffffffffffffffffffffffffffffffff928216600160401b026fffffffffffffffffffffffffffffffff199094169582169590951792909217169290921792909217909155601554601491161115610da557601554610d6f906014906001600160401b0316611140565b610d7a9060016111d8565b601560086101000a8154816001600160401b0302191690836001600160401b03160217905550610ddf565b601554600160401b90046001600160401b0316600003610ddf57601580546fffffffffffffffff00000000000000001916600160401b1790555b60155460408051600787810b825286900b60208201526001600160401b03858116928201929092529116907f711ec967033ec46cfd39f87b394bfc9eaa085e46ccff6af30fdbfc72c2482f709060600160405180910390a250505050565b6000610e49838361066f565b610ec7576000838152602081815260408083206001600160a01b03861684529091529020805460ff19166001179055610e7f3390565b6001600160a01b0316826001600160a01b0316847f2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d60405160405180910390a450600161042b565b50600061042b565b6000610edb838361066f565b15610ec7576000838152602081815260408083206001600160a01b0386168085529252808320805460ff1916905551339286917ff6391f5c32d9c69d2a47ea670b442974b53935d1edc7fd64eb21e047a839171b9190a450600161042b565b610f44828261066f565b610f735760405163e2517d3f60e01b81526001600160a01b03821660048201526024810183905260440161078d565b5050565b600060208284031215610f8957600080fd5b81356001600160e01b031981168114610fa157600080fd5b9392505050565b600060208284031215610fba57600080fd5b5035919050565b8060070b8114610b0257600080fd5b6001600160401b0381168114610b0257600080fd5b600080600060608486031215610ffa57600080fd5b833561100581610fc1565b9250602084013561101581610fc1565b9150604084013561102581610fd0565b809150509250925092565b6000806040838503121561104357600080fd5b8235915060208301356001600160a01b038116811461106157600080fd5b809150509250929050565b60006020828403121561107e57600080fd5b813560028110610fa157600080fd5b634e487b7160e01b600052602160045260246000fd5b60208101600283106110c557634e487b7160e01b600052602160045260246000fd5b91905290565b6000602082840312156110dd57600080fd5b8135610fa181610fd0565b6000806000606084860312156110fd57600080fd5b835161110881610fc1565b602085015190935061111981610fc1565b604085015190925061102581610fd0565b634e487b7160e01b600052601160045260246000fd5b6001600160401b038281168282160390808211156111605761116061112a565b5092915050565b60008261118457634e487b7160e01b600052601260045260246000fd5b500690565b634e487b7160e01b600052603260045260246000fd5b8181038181111561042b5761042b61112a565b60006001600160401b038083168181036111ce576111ce61112a565b6001019392505050565b6001600160401b038181168382160190808211156111605761116061112a56fea2646970667358221220e79ad302555de16c8a4090a4fcb6fa18a7dedb8e13be283fd76ea36cedb6820664736f6c63430008180033";
 
 type AprPairFeedConstructorParams =
   | [signer?: Signer]
@@ -423,28 +683,28 @@ export class AprPairFeed__factory extends ContractFactory {
   }
 
   override getDeployTransaction(
-    aaveProvider_: AddressLike,
-    susdaiProvider_: AddressLike,
-    owner_: AddressLike,
+    provider_: AddressLike,
+    admin_: AddressLike,
+    staleAfter_: BigNumberish,
     overrides?: NonPayableOverrides & { from?: string }
   ): Promise<ContractDeployTransaction> {
     return super.getDeployTransaction(
-      aaveProvider_,
-      susdaiProvider_,
-      owner_,
+      provider_,
+      admin_,
+      staleAfter_,
       overrides || {}
     );
   }
   override deploy(
-    aaveProvider_: AddressLike,
-    susdaiProvider_: AddressLike,
-    owner_: AddressLike,
+    provider_: AddressLike,
+    admin_: AddressLike,
+    staleAfter_: BigNumberish,
     overrides?: NonPayableOverrides & { from?: string }
   ) {
     return super.deploy(
-      aaveProvider_,
-      susdaiProvider_,
-      owner_,
+      provider_,
+      admin_,
+      staleAfter_,
       overrides || {}
     ) as Promise<
       AprPairFeed & {

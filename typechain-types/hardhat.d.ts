@@ -14,6 +14,14 @@ import * as Contracts from ".";
 declare module "hardhat/types/runtime" {
   interface HardhatEthersHelpers extends HardhatEthersHelpersBase {
     getContractFactory(
+      name: "AccessControl",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.AccessControl__factory>;
+    getContractFactory(
+      name: "IAccessControl",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IAccessControl__factory>;
+    getContractFactory(
       name: "Ownable",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Ownable__factory>;
@@ -50,6 +58,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC20__factory>;
     getContractFactory(
+      name: "ERC165",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ERC165__factory>;
+    getContractFactory(
+      name: "IERC165",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IERC165__factory>;
+    getContractFactory(
       name: "RiskParams",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.RiskParams__factory>;
@@ -65,6 +81,14 @@ declare module "hardhat/types/runtime" {
       name: "IAprFeed",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IAprFeed__factory>;
+    getContractFactory(
+      name: "IAprPairFeed",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IAprPairFeed__factory>;
+    getContractFactory(
+      name: "IStrategyAprPairProvider",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IStrategyAprPairProvider__factory>;
     getContractFactory(
       name: "ICooldownHandler",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -110,9 +134,17 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IAavePool__factory>;
     getContractFactory(
-      name: "SUSDaiAprProvider",
+      name: "ERC4626AprProvider",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.SUSDaiAprProvider__factory>;
+    ): Promise<Contracts.ERC4626AprProvider__factory>;
+    getContractFactory(
+      name: "IAavePool",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IAavePool__factory>;
+    getContractFactory(
+      name: "SUSDaiAprPairProvider",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SUSDaiAprPairProvider__factory>;
     getContractFactory(
       name: "MockAavePool",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -127,6 +159,16 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.MockERC4626__factory>;
 
     getContractAt(
+      name: "AccessControl",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.AccessControl>;
+    getContractAt(
+      name: "IAccessControl",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IAccessControl>;
+    getContractAt(
       name: "Ownable",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -172,6 +214,16 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC20>;
     getContractAt(
+      name: "ERC165",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ERC165>;
+    getContractAt(
+      name: "IERC165",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IERC165>;
+    getContractAt(
       name: "RiskParams",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -191,6 +243,16 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IAprFeed>;
+    getContractAt(
+      name: "IAprPairFeed",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IAprPairFeed>;
+    getContractAt(
+      name: "IStrategyAprPairProvider",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IStrategyAprPairProvider>;
     getContractAt(
       name: "ICooldownHandler",
       address: string | ethers.Addressable,
@@ -247,10 +309,20 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IAavePool>;
     getContractAt(
-      name: "SUSDaiAprProvider",
+      name: "ERC4626AprProvider",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.SUSDaiAprProvider>;
+    ): Promise<Contracts.ERC4626AprProvider>;
+    getContractAt(
+      name: "IAavePool",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IAavePool>;
+    getContractAt(
+      name: "SUSDaiAprPairProvider",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SUSDaiAprPairProvider>;
     getContractAt(
       name: "MockAavePool",
       address: string | ethers.Addressable,
@@ -268,6 +340,14 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.MockERC4626>;
 
     deployContract(
+      name: "AccessControl",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.AccessControl>;
+    deployContract(
+      name: "IAccessControl",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IAccessControl>;
+    deployContract(
       name: "Ownable",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Ownable>;
@@ -304,6 +384,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20>;
     deployContract(
+      name: "ERC165",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ERC165>;
+    deployContract(
+      name: "IERC165",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC165>;
+    deployContract(
       name: "RiskParams",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.RiskParams>;
@@ -319,6 +407,14 @@ declare module "hardhat/types/runtime" {
       name: "IAprFeed",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IAprFeed>;
+    deployContract(
+      name: "IAprPairFeed",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IAprPairFeed>;
+    deployContract(
+      name: "IStrategyAprPairProvider",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IStrategyAprPairProvider>;
     deployContract(
       name: "ICooldownHandler",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -364,9 +460,17 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IAavePool>;
     deployContract(
-      name: "SUSDaiAprProvider",
+      name: "ERC4626AprProvider",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SUSDaiAprProvider>;
+    ): Promise<Contracts.ERC4626AprProvider>;
+    deployContract(
+      name: "IAavePool",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IAavePool>;
+    deployContract(
+      name: "SUSDaiAprPairProvider",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SUSDaiAprPairProvider>;
     deployContract(
       name: "MockAavePool",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -381,6 +485,16 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.MockERC4626>;
 
     deployContract(
+      name: "AccessControl",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.AccessControl>;
+    deployContract(
+      name: "IAccessControl",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IAccessControl>;
+    deployContract(
       name: "Ownable",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -426,6 +540,16 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20>;
     deployContract(
+      name: "ERC165",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ERC165>;
+    deployContract(
+      name: "IERC165",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC165>;
+    deployContract(
       name: "RiskParams",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -445,6 +569,16 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IAprFeed>;
+    deployContract(
+      name: "IAprPairFeed",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IAprPairFeed>;
+    deployContract(
+      name: "IStrategyAprPairProvider",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IStrategyAprPairProvider>;
     deployContract(
       name: "ICooldownHandler",
       args: any[],
@@ -501,10 +635,20 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IAavePool>;
     deployContract(
-      name: "SUSDaiAprProvider",
+      name: "ERC4626AprProvider",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SUSDaiAprProvider>;
+    ): Promise<Contracts.ERC4626AprProvider>;
+    deployContract(
+      name: "IAavePool",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IAavePool>;
+    deployContract(
+      name: "SUSDaiAprPairProvider",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SUSDaiAprPairProvider>;
     deployContract(
       name: "MockAavePool",
       args: any[],

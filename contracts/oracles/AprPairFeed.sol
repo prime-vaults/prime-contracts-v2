@@ -3,103 +3,164 @@ pragma solidity ^0.8.24;
 
 // ══════════════════════════════════════════════════════════════════════
 //  PRIMEVAULTS V3 — AprPairFeed
-//  Aggregates benchmark APR (Aave) + strategy APR (sUSDai) from providers
+//  Strata-compatible dual-source APR feed with round history
 //  See: docs/PV_V3_APR_ORACLE.md section 4
 // ══════════════════════════════════════════════════════════════════════
 
-import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {IAprFeed} from "../interfaces/IAprFeed.sol";
-import {AaveAprProvider} from "./providers/AaveAprProvider.sol";
-import {SUSDaiAprProvider} from "./providers/SUSDaiAprProvider.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IAprPairFeed, IStrategyAprPairProvider} from "../interfaces/IAprPairFeed.sol";
 
 /**
  * @title AprPairFeed
- * @notice Aggregates benchmark APR (Aave) + strategy APR (sUSDai) from on-chain providers.
- * @dev Replaces manual setAprPair. Both values fully on-chain.
- *      updateRoundData() is permissionless — anyone can call (no value extraction possible).
- *      Fallback: governance can override via setManualApr() for emergencies.
- *      See docs/PV_V3_FINAL_v34.md section 29 for architecture.
+ * @notice Strata-compatible dual-source APR feed with circular buffer history.
+ * @dev Two update modes:
+ *      PUSH — UPDATER_FEED_ROLE calls updateRoundData(aprTarget, aprBase, timestamp)
+ *      PULL — UPDATER_FEED_ROLE calls updateRoundData() which calls provider.getAprPair()
+ *      latestRoundData() behavior depends on sourcePref:
+ *        Feed mode: returns cached round if not stale, else falls back to provider
+ *        Strategy mode: always calls provider directly
+ *      APR values: int64 × 12 decimals. Bounds: [-50%, +200%].
+ *      20-round circular buffer for historical access.
  */
-contract AprPairFeed is Ownable2Step, IAprFeed {
+contract AprPairFeed is AccessControl, IAprPairFeed {
+    // ═══════════════════════════════════════════════════════════════════
+    //  CONSTANTS
+    // ═══════════════════════════════════════════════════════════════════
+
+    bytes32 public constant UPDATER_FEED_ROLE = keccak256("UPDATER_FEED_ROLE");
+    uint256 public constant MAX_ROUNDS = 20;
+
+    // APR bounds: int64 × 12 decimals. 1% = 1e10
+    int64 public constant APR_LOWER_BOUND = -500_000_000_000; // -50%
+    int64 public constant APR_UPPER_BOUND = 2_000_000_000_000; // +200%
+
     // ═══════════════════════════════════════════════════════════════════
     //  IMMUTABLES
     // ═══════════════════════════════════════════════════════════════════
 
-    AaveAprProvider public immutable i_aaveProvider;
-    SUSDaiAprProvider public immutable i_susdaiProvider;
+    IStrategyAprPairProvider public immutable i_provider;
 
     // ═══════════════════════════════════════════════════════════════════
     //  STATE
     // ═══════════════════════════════════════════════════════════════════
 
-    uint256 public s_aprTarget;
-    uint256 public s_aprBase;
-    uint256 public s_lastUpdated;
-    uint256 public s_staleAfter;
+    TRound[20] public s_rounds;
+    uint64 public s_currentRoundId;
+    uint64 public s_oldestRoundId;
 
-    bool public s_manualOverride;
-    uint256 public s_manualAprTarget;
-    uint256 public s_manualAprBase;
+    ESourcePref public s_sourcePref;
+    uint256 public s_staleAfter;
 
     // ═══════════════════════════════════════════════════════════════════
     //  EVENTS
     // ═══════════════════════════════════════════════════════════════════
 
-    event ManualOverrideSet(uint256 aprTarget, uint256 aprBase);
-    event ManualOverrideCleared();
+    event RoundUpdated(uint64 indexed roundId, int64 aprTarget, int64 aprBase, uint64 timestamp);
+    event SourcePrefUpdated(ESourcePref pref);
+    event StaleAfterUpdated(uint256 staleAfter);
 
     // ═══════════════════════════════════════════════════════════════════
     //  ERRORS
     // ═══════════════════════════════════════════════════════════════════
 
-    error PrimeVaults__StaleApr(uint256 lastUpdated, uint256 staleAfter);
+    error PrimeVaults__AprOutOfBounds(int64 value, int64 lower, int64 upper);
+    error PrimeVaults__TimestampOutOfOrder(uint64 provided, uint64 lastStored);
+    error PrimeVaults__RoundNotAvailable(uint64 roundId);
+    error PrimeVaults__NoRoundData();
 
     // ═══════════════════════════════════════════════════════════════════
     //  CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════
 
-    constructor(address aaveProvider_, address susdaiProvider_, address owner_) Ownable(owner_) {
-        i_aaveProvider = AaveAprProvider(aaveProvider_);
-        i_susdaiProvider = SUSDaiAprProvider(susdaiProvider_);
-        s_staleAfter = 172_800; // 48 hours
+    constructor(address provider_, address admin_, uint256 staleAfter_) {
+        i_provider = IStrategyAprPairProvider(provider_);
+        s_staleAfter = staleAfter_;
+        s_sourcePref = ESourcePref.Feed;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, admin_);
+        _grantRole(UPDATER_FEED_ROLE, admin_);
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  VIEW (Accounting calls this)
+    //  UPDATE — PUSH MODE (external observer sends APR)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Get APR pair — reverts if stale.
-     * @return aprTarget Benchmark APR (Aave weighted avg), 18 decimals
-     * @return aprBase Strategy APR (sUSDai yield), 18 decimals
+     * @notice PUSH mode: store APR data from an external observer.
+     * @dev Only callable by UPDATER_FEED_ROLE. Validates bounds and timestamp ordering.
+     * @param aprTarget Benchmark APR, int64 × 12 decimals
+     * @param aprBase Strategy APR, int64 × 12 decimals
+     * @param timestamp Data timestamp (must be > last stored timestamp)
      */
-    function getAprPair() external view override returns (uint256 aprTarget, uint256 aprBase) {
-        if (block.timestamp - s_lastUpdated > s_staleAfter) {
-            revert PrimeVaults__StaleApr(s_lastUpdated, s_staleAfter);
-        }
-        return (s_aprTarget, s_aprBase);
+    function updateRoundData(int64 aprTarget, int64 aprBase, uint64 timestamp) external onlyRole(UPDATER_FEED_ROLE) {
+        _validateBounds(aprTarget);
+        _validateBounds(aprBase);
+        _validateTimestamp(timestamp);
+        _storeRound(aprTarget, aprBase, timestamp);
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  UPDATE (permissionless — anyone can call)
+    //  UPDATE — PULL MODE (call provider)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Fetch fresh APR from both providers and cache.
-     * @dev Permissionless — anyone can call (no value extraction possible).
-     *      In manual override mode: uses manual values instead of providers.
+     * @notice PULL mode: fetch APR from the strategy provider and store.
+     * @dev Only callable by UPDATER_FEED_ROLE. Calls provider.getAprPair() which is state-changing.
      */
-    function updateRoundData() external override {
-        if (s_manualOverride) {
-            s_aprTarget = s_manualAprTarget;
-            s_aprBase = s_manualAprBase;
-        } else {
-            s_aprTarget = i_aaveProvider.fetchBenchmarkApr();
-            s_aprBase = i_susdaiProvider.fetchStrategyApr();
+    function updateRoundData() external onlyRole(UPDATER_FEED_ROLE) {
+        (int64 aprTarget, int64 aprBase, uint64 timestamp) = i_provider.getAprPair();
+        _validateBounds(aprTarget);
+        _validateBounds(aprBase);
+        _validateTimestamp(timestamp);
+        _storeRound(aprTarget, aprBase, timestamp);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  READ
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Get the latest APR round data.
+     * @dev Feed mode: returns cached round if not stale, else falls back to provider.
+     *      Strategy mode: always calls provider (state-changing).
+     * @return round The latest TRound
+     */
+    function latestRoundData() external override returns (TRound memory round) {
+        if (s_sourcePref == ESourcePref.Strategy) {
+            // Always pull fresh from provider
+            (int64 aprTarget, int64 aprBase, uint64 timestamp) = i_provider.getAprPair();
+            return TRound({roundId: 0, aprTarget: aprTarget, aprBase: aprBase, timestamp: timestamp});
         }
 
-        s_lastUpdated = block.timestamp;
-        emit AprUpdated(s_aprTarget, s_aprBase, block.timestamp);
+        // Feed mode: use cached if fresh
+        if (s_currentRoundId == 0) revert PrimeVaults__NoRoundData();
+
+        uint256 idx = (s_currentRoundId - 1) % MAX_ROUNDS;
+        round = s_rounds[idx];
+
+        // If stale, fall back to provider
+        if (block.timestamp - uint256(round.timestamp) > s_staleAfter) {
+            (int64 aprTarget, int64 aprBase, uint64 timestamp) = i_provider.getAprPair();
+            return TRound({roundId: 0, aprTarget: aprTarget, aprBase: aprBase, timestamp: timestamp});
+        }
+    }
+
+    /**
+     * @notice Get a historical APR round by ID.
+     * @dev Reverts if round has been overwritten in the circular buffer.
+     * @param roundId The round to retrieve
+     * @return round The requested TRound
+     */
+    function getRoundData(uint64 roundId) external view override returns (TRound memory round) {
+        if (roundId == 0 || roundId > s_currentRoundId || roundId < s_oldestRoundId) {
+            revert PrimeVaults__RoundNotAvailable(roundId);
+        }
+
+        uint256 idx = (roundId - 1) % MAX_ROUNDS;
+        round = s_rounds[idx];
+
+        // Verify the round wasn't overwritten
+        if (round.roundId != roundId) revert PrimeVaults__RoundNotAvailable(roundId);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -107,31 +168,59 @@ contract AprPairFeed is Ownable2Step, IAprFeed {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Emergency manual override — governance sets APR directly.
-     * @dev Use when: provider broken, sUSDai contract paused, first 24h after deploy.
-     * @param aprTarget_ Benchmark APR (18 decimals)
-     * @param aprBase_ Strategy APR (18 decimals)
+     * @notice Set the source preference for latestRoundData().
+     * @param pref Feed (prefer cached) or Strategy (always pull)
      */
-    function setManualApr(uint256 aprTarget_, uint256 aprBase_) external onlyOwner {
-        s_manualOverride = true;
-        s_manualAprTarget = aprTarget_;
-        s_manualAprBase = aprBase_;
-        emit ManualOverrideSet(aprTarget_, aprBase_);
+    function setSourcePref(ESourcePref pref) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        s_sourcePref = pref;
+        emit SourcePrefUpdated(pref);
     }
 
     /**
-     * @notice Disable manual override — resume reading from providers.
-     */
-    function clearManualOverride() external onlyOwner {
-        s_manualOverride = false;
-        emit ManualOverrideCleared();
-    }
-
-    /**
-     * @notice Update the staleness threshold.
+     * @notice Update the staleness threshold for Feed mode.
      * @param staleAfter_ New staleness duration in seconds
      */
-    function setStaleAfter(uint256 staleAfter_) external onlyOwner {
+    function setStaleAfter(uint256 staleAfter_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         s_staleAfter = staleAfter_;
+        emit StaleAfterUpdated(staleAfter_);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  INTERNAL
+    // ═══════════════════════════════════════════════════════════════════
+
+    function _validateBounds(int64 value) internal pure {
+        if (value < APR_LOWER_BOUND || value > APR_UPPER_BOUND) {
+            revert PrimeVaults__AprOutOfBounds(value, APR_LOWER_BOUND, APR_UPPER_BOUND);
+        }
+    }
+
+    function _validateTimestamp(uint64 timestamp) internal view {
+        if (s_currentRoundId > 0) {
+            uint256 idx = (s_currentRoundId - 1) % MAX_ROUNDS;
+            uint64 lastTs = s_rounds[idx].timestamp;
+            if (timestamp <= lastTs) revert PrimeVaults__TimestampOutOfOrder(timestamp, lastTs);
+        }
+    }
+
+    function _storeRound(int64 aprTarget, int64 aprBase, uint64 timestamp) internal {
+        s_currentRoundId++;
+        uint256 idx = (s_currentRoundId - 1) % MAX_ROUNDS;
+
+        s_rounds[idx] = TRound({
+            roundId: s_currentRoundId,
+            aprTarget: aprTarget,
+            aprBase: aprBase,
+            timestamp: timestamp
+        });
+
+        // Track oldest available round
+        if (s_currentRoundId > uint64(MAX_ROUNDS)) {
+            s_oldestRoundId = s_currentRoundId - uint64(MAX_ROUNDS) + 1;
+        } else if (s_oldestRoundId == 0) {
+            s_oldestRoundId = 1;
+        }
+
+        emit RoundUpdated(s_currentRoundId, aprTarget, aprBase, timestamp);
     }
 }

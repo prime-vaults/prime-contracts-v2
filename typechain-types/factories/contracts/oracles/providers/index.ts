@@ -2,4 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as aaveAprProviderSol from "./AaveAprProvider.sol";
-export { SUSDaiAprProvider__factory } from "./SUSDaiAprProvider__factory";
+export * as susDaiAprPairProviderSol from "./SUSDaiAprPairProvider.sol";
+export { ERC4626AprProvider__factory } from "./ERC4626AprProvider__factory";

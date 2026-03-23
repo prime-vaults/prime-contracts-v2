@@ -5,28 +5,29 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("AprPairFeed", () => {
   let feed: any;
+  let provider: any;
   let mockPool: any;
   let mockVault: any;
-  let aaveProvider: any;
-  let susdaiProvider: any;
   let aUsdc: any;
   let aUsdt: any;
-  let owner: SignerWithAddress;
-  let keeper: SignerWithAddress;
+  let admin: SignerWithAddress;
+  let updater: SignerWithAddress;
   let other: SignerWithAddress;
 
   const E18 = 10n ** 18n;
   const USDC = "0x0000000000000000000000000000000000000001";
   const USDT = "0x0000000000000000000000000000000000000002";
+  const RATE_USDC_RAY = 30_000_000_000_000_000_000_000_000n;
+  const RATE_USDT_RAY = 50_000_000_000_000_000_000_000_000n;
+  const STALE_AFTER = 172_800; // 48h
 
-  // 3% and 5% in ray
-  const RATE_USDC_RAY = 30000000000000000000000000n;
-  const RATE_USDT_RAY = 50000000000000000000000000n;
+  // Helper to get UPDATER_FEED_ROLE hash
+  let UPDATER_FEED_ROLE: string;
 
   beforeEach(async () => {
-    [owner, keeper, other] = await ethers.getSigners();
+    [admin, updater, other] = await ethers.getSigners();
 
-    // --- Mock Aave setup ---
+    // --- Mocks ---
     const PoolFactory = await ethers.getContractFactory("MockAavePool");
     mockPool = await PoolFactory.deploy();
 
@@ -36,190 +37,310 @@ describe("AprPairFeed", () => {
 
     await mockPool.setLiquidityRate(USDC, RATE_USDC_RAY);
     await mockPool.setLiquidityRate(USDT, RATE_USDT_RAY);
-    await aUsdc.mint(owner.address, ethers.parseUnits("1000000", 18));
-    await aUsdt.mint(owner.address, ethers.parseUnits("1000000", 18));
+    await aUsdc.mint(admin.address, ethers.parseUnits("1000000", 18));
+    await aUsdt.mint(admin.address, ethers.parseUnits("1000000", 18));
 
-    const AaveFactory = await ethers.getContractFactory("AaveAprProvider");
-    aaveProvider = await AaveFactory.deploy(
-      await mockPool.getAddress(), USDC, USDT,
-      await aUsdc.getAddress(), await aUsdt.getAddress(),
-    );
-
-    // --- Mock sUSDai setup ---
     const VaultFactory = await ethers.getContractFactory("MockERC4626");
     mockVault = await VaultFactory.deploy("sUSDai", "sUSDai", E18);
 
-    const SUSDaiFactory = await ethers.getContractFactory("SUSDaiAprProvider");
-    susdaiProvider = await SUSDaiFactory.deploy(
-      await mockVault.getAddress(), keeper.address, owner.address,
+    // --- Provider ---
+    const ProviderFactory = await ethers.getContractFactory("SUSDaiAprPairProvider");
+    provider = await ProviderFactory.deploy(
+      await mockPool.getAddress(), USDC, USDT,
+      await aUsdc.getAddress(), await aUsdt.getAddress(),
+      await mockVault.getAddress(),
     );
 
-    // Take a second snapshot so fetchStrategyApr works
-    await time.increase(86400);
-    const newRate = E18 + (E18 * 15n) / (100n * 365n); // ~15% APR daily growth
-    await mockVault.setRate(newRate);
-    await susdaiProvider.connect(keeper).snapshot();
-
-    // --- Deploy AprPairFeed ---
+    // --- AprPairFeed ---
     const FeedFactory = await ethers.getContractFactory("AprPairFeed");
     feed = await FeedFactory.deploy(
-      await aaveProvider.getAddress(),
-      await susdaiProvider.getAddress(),
-      owner.address,
+      await provider.getAddress(),
+      admin.address,
+      STALE_AFTER,
     );
+
+    UPDATER_FEED_ROLE = await feed.UPDATER_FEED_ROLE();
+
+    // Grant updater role
+    await feed.connect(admin).grantRole(UPDATER_FEED_ROLE, updater.address);
   });
 
   // ═══════════════════════════════════════════════════════════════════
-  //  Constructor
+  //  PUSH mode — updateRoundData(aprTarget, aprBase, timestamp)
   // ═══════════════════════════════════════════════════════════════════
 
-  describe("constructor", () => {
-    it("should set staleAfter to 48 hours", async () => {
-      expect(await feed.s_staleAfter()).to.equal(172_800);
+  describe("PUSH mode", () => {
+    it("should store a round with provided values", async () => {
+      const now = BigInt(await time.latest()) + 1n;
+      await time.setNextBlockTimestamp(Number(now));
+
+      const aprTarget = 40_000_000_000n; // 4%
+      const aprBase = 150_000_000_000n;  // 15%
+
+      await feed.connect(updater)["updateRoundData(int64,int64,uint64)"](aprTarget, aprBase, now);
+
+      expect(await feed.s_currentRoundId()).to.equal(1);
+
+      const round = await feed.getRoundData(1);
+      expect(round.aprTarget).to.equal(aprTarget);
+      expect(round.aprBase).to.equal(aprBase);
+      expect(round.timestamp).to.equal(now);
     });
 
-    it("should not be in manual override mode", async () => {
-      expect(await feed.s_manualOverride()).to.be.false;
-    });
-  });
+    it("should emit RoundUpdated event", async () => {
+      const now = BigInt(await time.latest()) + 1n;
+      await time.setNextBlockTimestamp(Number(now));
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  updateRoundData
-  // ═══════════════════════════════════════════════════════════════════
-
-  describe("updateRoundData", () => {
-    it("should cache both APRs from providers", async () => {
-      await feed.updateRoundData();
-
-      const aprTarget = await feed.s_aprTarget();
-      const aprBase = await feed.s_aprBase();
-
-      // Aave: equal supply of USDC (3%) and USDT (5%) → 4%
-      expect(aprTarget).to.equal(40000000000000000n); // 0.04e18
-
-      // sUSDai: ~15% APR
-      expect(aprBase).to.be.gt(0);
+      await expect(
+        feed.connect(updater)["updateRoundData(int64,int64,uint64)"](40_000_000_000n, 150_000_000_000n, now),
+      ).to.emit(feed, "RoundUpdated");
     });
 
-    it("should update lastUpdated timestamp", async () => {
-      await feed.updateRoundData();
-      expect(await feed.s_lastUpdated()).to.be.gt(0);
-    });
-
-    it("should emit AprUpdated event", async () => {
-      await expect(feed.updateRoundData()).to.emit(feed, "AprUpdated");
-    });
-
-    it("should be callable by anyone (permissionless)", async () => {
-      await expect(feed.connect(other).updateRoundData()).to.not.be.reverted;
-    });
-
-    it("should use manual values when in override mode", async () => {
-      const manualTarget = (5n * E18) / 100n;
-      const manualBase = (20n * E18) / 100n;
-      await feed.connect(owner).setManualApr(manualTarget, manualBase);
-
-      await feed.updateRoundData();
-
-      expect(await feed.s_aprTarget()).to.equal(manualTarget);
-      expect(await feed.s_aprBase()).to.equal(manualBase);
+    it("should store multiple rounds sequentially", async () => {
+      let ts = BigInt(await time.latest());
+      for (let i = 0; i < 5; i++) {
+        ts += 100n;
+        await time.setNextBlockTimestamp(Number(ts));
+        await feed.connect(updater)["updateRoundData(int64,int64,uint64)"](
+          BigInt(i) * 10_000_000_000n, BigInt(i) * 20_000_000_000n, ts,
+        );
+      }
+      expect(await feed.s_currentRoundId()).to.equal(5);
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════
-  //  getAprPair
+  //  PULL mode — updateRoundData() calls provider
   // ═══════════════════════════════════════════════════════════════════
 
-  describe("getAprPair", () => {
-    it("should return cached values after updateRoundData", async () => {
-      await feed.updateRoundData();
+  describe("PULL mode", () => {
+    it("should call provider.getAprPair() and store result", async () => {
+      await time.increase(10);
+      await feed.connect(updater)["updateRoundData()"]();
 
-      const [aprTarget, aprBase] = await feed.getAprPair();
-      expect(aprTarget).to.equal(await feed.s_aprTarget());
-      expect(aprBase).to.equal(await feed.s_aprBase());
+      expect(await feed.s_currentRoundId()).to.equal(1);
+
+      const round = await feed.getRoundData(1);
+      // aprTarget from Aave: (3%+5%)/2 = 4% = 40_000_000_000
+      expect(round.aprTarget).to.equal(40_000_000_000n);
+      // aprBase = 0 (first call, no prev snapshot)
+      expect(round.aprBase).to.equal(0);
     });
 
-    it("should revert when stale (never updated)", async () => {
-      await expect(feed.getAprPair())
-        .to.be.revertedWithCustomError(feed, "PrimeVaults__StaleApr");
-    });
+    it("should store non-zero aprBase after provider has 2 snapshots", async () => {
+      // First call: seeds provider prev snapshot
+      await time.increase(86400);
+      await feed.connect(updater)["updateRoundData()"]();
 
-    it("should revert when data exceeds staleAfter", async () => {
-      await feed.updateRoundData();
+      // Increase vault rate (~15% APR)
+      const dailyGrowth = (E18 * 15n) / (100n * 365n);
+      await mockVault.setRate(E18 + dailyGrowth);
 
-      // Advance past 48h
-      await time.increase(172_801);
+      // Second call: provider now has 2 snapshots
+      await time.increase(86400);
+      await feed.connect(updater)["updateRoundData()"]();
 
-      await expect(feed.getAprPair())
-        .to.be.revertedWithCustomError(feed, "PrimeVaults__StaleApr");
-    });
-
-    it("should not revert at exactly staleAfter boundary", async () => {
-      await feed.updateRoundData();
-      await time.increase(172_800);
-
-      await expect(feed.getAprPair()).to.not.be.reverted;
+      const round = await feed.getRoundData(2);
+      expect(round.aprBase).to.be.gt(0);
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════
-  //  setManualApr / clearManualOverride
+  //  latestRoundData — Feed mode
   // ═══════════════════════════════════════════════════════════════════
 
-  describe("manual override", () => {
-    it("should enable manual override with setManualApr", async () => {
-      const target = (4n * E18) / 100n;
-      const base = (12n * E18) / 100n;
+  describe("latestRoundData — Feed mode", () => {
+    it("should return cached round if not stale", async () => {
+      const now = BigInt(await time.latest()) + 10n;
+      await time.setNextBlockTimestamp(Number(now));
+      await feed.connect(updater)["updateRoundData(int64,int64,uint64)"](
+        40_000_000_000n, 150_000_000_000n, now,
+      );
 
-      await expect(feed.connect(owner).setManualApr(target, base))
-        .to.emit(feed, "ManualOverrideSet")
-        .withArgs(target, base);
-
-      expect(await feed.s_manualOverride()).to.be.true;
-      expect(await feed.s_manualAprTarget()).to.equal(target);
-      expect(await feed.s_manualAprBase()).to.equal(base);
+      const round = await feed.latestRoundData.staticCall();
+      expect(round.aprTarget).to.equal(40_000_000_000n);
+      expect(round.aprBase).to.equal(150_000_000_000n);
+      expect(round.roundId).to.equal(1);
     });
 
-    it("should resume auto mode with clearManualOverride", async () => {
-      await feed.connect(owner).setManualApr((4n * E18) / 100n, (12n * E18) / 100n);
-      expect(await feed.s_manualOverride()).to.be.true;
+    it("should fall back to provider if cached round is stale", async () => {
+      const now = BigInt(await time.latest()) + 10n;
+      await time.setNextBlockTimestamp(Number(now));
+      await feed.connect(updater)["updateRoundData(int64,int64,uint64)"](
+        40_000_000_000n, 150_000_000_000n, now,
+      );
 
-      await expect(feed.connect(owner).clearManualOverride())
-        .to.emit(feed, "ManualOverrideCleared");
+      // Advance past staleAfter (48h)
+      await time.increase(STALE_AFTER + 1);
 
-      expect(await feed.s_manualOverride()).to.be.false;
-
-      // updateRoundData should now use providers
-      await feed.updateRoundData();
-      const aprTarget = await feed.s_aprTarget();
-      // Should be Aave rate (4%), not manual override
-      expect(aprTarget).to.equal(40000000000000000n);
+      const round = await feed.latestRoundData.staticCall();
+      // Falls back to provider — roundId = 0 (not from buffer)
+      expect(round.roundId).to.equal(0);
+      // aprTarget should come from Aave (4%)
+      expect(round.aprTarget).to.equal(40_000_000_000n);
     });
 
-    it("should revert setManualApr when called by non-owner", async () => {
-      await expect(feed.connect(other).setManualApr(E18, E18))
-        .to.be.revertedWithCustomError(feed, "OwnableUnauthorizedAccount");
-    });
-
-    it("should revert clearManualOverride when called by non-owner", async () => {
-      await expect(feed.connect(other).clearManualOverride())
-        .to.be.revertedWithCustomError(feed, "OwnableUnauthorizedAccount");
+    it("should revert if no round data and cache empty", async () => {
+      // Feed mode, no rounds stored
+      await expect(feed.latestRoundData.staticCall())
+        .to.be.revertedWithCustomError(feed, "PrimeVaults__NoRoundData");
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════
-  //  setStaleAfter
+  //  latestRoundData — Strategy mode
   // ═══════════════════════════════════════════════════════════════════
 
-  describe("setStaleAfter", () => {
-    it("should update staleness threshold", async () => {
-      await feed.connect(owner).setStaleAfter(3600);
-      expect(await feed.s_staleAfter()).to.equal(3600);
+  describe("latestRoundData — Strategy mode", () => {
+    it("should always call provider regardless of cache", async () => {
+      await feed.connect(admin).setSourcePref(1); // Strategy = 1
+
+      // Even with a cached round...
+      const now = BigInt(await time.latest()) + 10n;
+      await time.setNextBlockTimestamp(Number(now));
+      await feed.connect(updater)["updateRoundData(int64,int64,uint64)"](
+        99_000_000_000n, 99_000_000_000n, now,
+      );
+
+      // latestRoundData ignores cache, calls provider
+      const round = await feed.latestRoundData.staticCall();
+      expect(round.roundId).to.equal(0); // from provider, not buffer
+      expect(round.aprTarget).to.equal(40_000_000_000n); // Aave 4%, not 99
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Bounds validation
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("bounds validation", () => {
+    it("should revert if aprTarget exceeds +200%", async () => {
+      const now = BigInt(await time.latest()) + 10n;
+      await time.setNextBlockTimestamp(Number(now));
+
+      const tooHigh = 2_000_000_000_001n; // just over +200%
+      await expect(
+        feed.connect(updater)["updateRoundData(int64,int64,uint64)"](tooHigh, 0, now),
+      ).to.be.revertedWithCustomError(feed, "PrimeVaults__AprOutOfBounds");
     });
 
-    it("should revert when called by non-owner", async () => {
-      await expect(feed.connect(other).setStaleAfter(3600))
-        .to.be.revertedWithCustomError(feed, "OwnableUnauthorizedAccount");
+    it("should revert if aprBase below -50%", async () => {
+      const now = BigInt(await time.latest()) + 10n;
+      await time.setNextBlockTimestamp(Number(now));
+
+      const tooLow = -500_000_000_001n; // just below -50%
+      await expect(
+        feed.connect(updater)["updateRoundData(int64,int64,uint64)"](0, tooLow, now),
+      ).to.be.revertedWithCustomError(feed, "PrimeVaults__AprOutOfBounds");
+    });
+
+    it("should accept values at boundaries", async () => {
+      const now = BigInt(await time.latest()) + 10n;
+      await time.setNextBlockTimestamp(Number(now));
+
+      await expect(
+        feed.connect(updater)["updateRoundData(int64,int64,uint64)"](
+          2_000_000_000_000n, -500_000_000_000n, now,
+        ),
+      ).to.not.be.reverted;
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Timestamp ordering
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("timestamp ordering", () => {
+    it("should revert if timestamp is not increasing", async () => {
+      const now = BigInt(await time.latest()) + 10n;
+      await time.setNextBlockTimestamp(Number(now));
+      await feed.connect(updater)["updateRoundData(int64,int64,uint64)"](0, 0, now);
+
+      // Try to submit with same or older timestamp
+      await time.setNextBlockTimestamp(Number(now) + 1);
+      await expect(
+        feed.connect(updater)["updateRoundData(int64,int64,uint64)"](0, 0, now), // same ts
+      ).to.be.revertedWithCustomError(feed, "PrimeVaults__TimestampOutOfOrder");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  getRoundData — historical access
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("getRoundData", () => {
+    it("should return historical round by ID", async () => {
+      let ts = BigInt(await time.latest());
+      for (let i = 0; i < 3; i++) {
+        ts += 100n;
+        await time.setNextBlockTimestamp(Number(ts));
+        await feed.connect(updater)["updateRoundData(int64,int64,uint64)"](
+          BigInt(i + 1) * 10_000_000_000n, 0n, ts,
+        );
+      }
+
+      const round1 = await feed.getRoundData(1);
+      expect(round1.aprTarget).to.equal(10_000_000_000n);
+
+      const round2 = await feed.getRoundData(2);
+      expect(round2.aprTarget).to.equal(20_000_000_000n);
+    });
+
+    it("should revert if round has been overwritten (> 20 rounds)", async () => {
+      let ts = BigInt(await time.latest());
+      for (let i = 0; i < 21; i++) {
+        ts += 100n;
+        await time.setNextBlockTimestamp(Number(ts));
+        await feed.connect(updater)["updateRoundData(int64,int64,uint64)"](0, 0, ts);
+      }
+
+      // Round 1 should be overwritten by round 21
+      await expect(feed.getRoundData(1))
+        .to.be.revertedWithCustomError(feed, "PrimeVaults__RoundNotAvailable");
+
+      // Round 2 should still be accessible
+      await expect(feed.getRoundData(2)).to.not.be.reverted;
+    });
+
+    it("should revert for roundId = 0", async () => {
+      await expect(feed.getRoundData(0))
+        .to.be.revertedWithCustomError(feed, "PrimeVaults__RoundNotAvailable");
+    });
+
+    it("should revert for roundId beyond current", async () => {
+      await expect(feed.getRoundData(999))
+        .to.be.revertedWithCustomError(feed, "PrimeVaults__RoundNotAvailable");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Access control
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("access control", () => {
+    it("should revert PUSH updateRoundData when called without UPDATER_FEED_ROLE", async () => {
+      const now = BigInt(await time.latest()) + 10n;
+      await expect(
+        feed.connect(other)["updateRoundData(int64,int64,uint64)"](0, 0, now),
+      ).to.be.reverted;
+    });
+
+    it("should revert PULL updateRoundData when called without UPDATER_FEED_ROLE", async () => {
+      await expect(
+        feed.connect(other)["updateRoundData()"](),
+      ).to.be.reverted;
+    });
+
+    it("should revert setSourcePref when called without DEFAULT_ADMIN_ROLE", async () => {
+      await expect(
+        feed.connect(other).setSourcePref(1),
+      ).to.be.reverted;
+    });
+
+    it("should revert setStaleAfter when called without DEFAULT_ADMIN_ROLE", async () => {
+      await expect(
+        feed.connect(other).setStaleAfter(3600),
+      ).to.be.reverted;
     });
   });
 });
