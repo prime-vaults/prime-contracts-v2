@@ -53,6 +53,10 @@ declare module "hardhat/types/runtime" {
       name: "IWETHPriceOracle",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IWETHPriceOracle__factory>;
+    getContractFactory(
+      name: "FixedPointMathHarness",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.FixedPointMathHarness__factory>;
 
     getContractAt(
       name: "IAaveWETHAdapter",
@@ -104,6 +108,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IWETHPriceOracle>;
+    getContractAt(
+      name: "FixedPointMathHarness",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.FixedPointMathHarness>;
 
     deployContract(
       name: "IAaveWETHAdapter",
@@ -145,6 +154,10 @@ declare module "hardhat/types/runtime" {
       name: "IWETHPriceOracle",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IWETHPriceOracle>;
+    deployContract(
+      name: "FixedPointMathHarness",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.FixedPointMathHarness>;
 
     deployContract(
       name: "IAaveWETHAdapter",
@@ -196,6 +209,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IWETHPriceOracle>;
+    deployContract(
+      name: "FixedPointMathHarness",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.FixedPointMathHarness>;
 
     // default types
     getContractFactory(
