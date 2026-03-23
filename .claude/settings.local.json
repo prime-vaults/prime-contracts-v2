@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2 -type f \\\\\\(-name *.md -o -name *.sol -o -name *.ts -o -name *.json -o -name *.toml \\\\\\))",
+      "Bash(pnpm init:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm approve-builds:*)",
+      "Bash(pnpm install:*)",
+      "Bash(npx hardhat:*)",
+      "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2/contracts -name *.sol)"
+    ]
+  }
+}
