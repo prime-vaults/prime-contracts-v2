@@ -23,18 +23,27 @@ mkdir -p docs
 
 ```
 Read all files in docs/ folder. These define PrimeVaults V3 — a 3-tranche
-structured yield protocol.
+structured yield protocol deployed on Arbitrum.
+
+Key context:
+- Strategy: sUSDai (USD.AI) — ERC-4626 deposit + ERC-7540 async redeem
+- sUSDai: 0x0B2b2B2076d95dda7817e785989fE353fe955ef9 (Arbitrum)
+- USDai: 0x0A1a1A107E45b7Ced86833863f482BC5f4ed82EF (Arbitrum)
+- APR oracle: fully on-chain (Aave benchmark + sUSDai rate snapshots)
+- See docs/PV_V3_APR_ORACLE.md for APR oracle architecture
 
 Rules for ALL code you generate:
 1. Follow docs/CONVENTIONS.md strictly — naming, formatting, NatSpec, errors
 2. Reference docs/PV_V3_FINAL_v34.md for architecture decisions
 3. Reference docs/PV_V3_MATH_REFERENCE.md for formulas (cite section in @dev)
-4. Follow docs/PV_V3_MVP_PLAN.md step order
-5. Every external/public function has full NatSpec
-6. Custom errors only — no require("string")
-7. 120 char line width, horizontal priority
-8. Run `npx hardhat compile` after creating each contract
-9. Run tests after creating each test file
+4. Reference docs/PV_V3_APR_ORACLE.md for APR oracle spec
+5. Follow docs/PV_V3_MVP_PLAN.md step order
+6. Every external/public function has full NatSpec
+7. Custom errors only — no require("string")
+8. 120 char line width, horizontal priority
+9. Run `npx hardhat compile` after creating each contract
+10. Run tests after creating each test file
+11. Network is Arbitrum — use Arbitrum contract addresses throughout
 ```
 
 ---
@@ -140,29 +149,64 @@ Run tests.
 
 ---
 
-## PROMPT 5 — AprPairFeed
+## PROMPT 5 — APR Oracle (3 contracts)
 
 ```
-Do Step 5-6 from docs/PV_V3_MVP_PLAN.md.
-Create contracts/oracles/AprPairFeed.sol.
+Do Step 5-6 using the spec from docs/PV_V3_APR_ORACLE.md.
 
-For MVP: skip the AaveAprProvider. AprPairFeed stores aprTarget and
-aprBase directly, set by governance. Add staleness check.
+Create 3 contracts:
 
-Functions:
-  getAprPair() → reverts if stale, returns (aprTarget, aprBase)
-  setAprPair(uint256, uint256) → onlyOwner, updates + timestamp
-  setStaleAfter(uint256) → onlyOwner
+1. contracts/oracles/providers/AaveAprProvider.sol
+   - Reads Aave v3 Arbitrum USDC + USDT currentLiquidityRate
+   - Returns supply-weighted average as benchmark APR
+   - Pure view function, no state, no keeper
+   - Addresses from docs/PV_V3_APR_ORACLE.md section 2
 
-Then write test/unit/AprPairFeed.test.ts:
-- Set APR pair, read back
-- Read after staleAfter → revert
-- Non-owner set → revert
+2. contracts/oracles/providers/SUSDaiAprProvider.sol
+   - snapshot(): keeper records sUSDai.convertToAssets(1e18)
+   - fetchStrategyApr(): APR from 2 snapshots (annualized growth)
+   - fetchLiveApr(): realtime estimate using latest snapshot + live rate
+   - MIN_SNAPSHOT_INTERVAL = 1 hour
+   - Constructor seeds first snapshot
+   - sUSDai address: 0x0B2b2B2076d95dda7817e785989fE353fe955ef9
 
-Run tests.
+3. contracts/oracles/AprPairFeed.sol
+   - updateRoundData(): fetch from both providers, cache
+   - getAprPair(): return cached, revert if stale (48h default)
+   - setManualApr(): emergency governance override
+   - clearManualOverride(): resume auto mode
+   - updateRoundData is permissionless (anyone can call)
+
+For testing create:
+  test/helpers/mocks/MockERC4626.sol — simulate sUSDai with configurable rate
+  test/helpers/mocks/MockAavePool.sol — simulate Aave getReserveData
+
+Write tests:
+  test/unit/AaveAprProvider.test.ts
+    - Returns weighted average of USDC + USDT rates
+    - Returns 0 if no supply
+
+  test/unit/SUSDaiAprProvider.test.ts
+    - snapshot: records rate + timestamp
+    - snapshot too soon: reverts (< 1 hour)
+    - fetchStrategyApr: correct annualized APR from 2 snapshots
+    - fetchStrategyApr before 2 snapshots: reverts
+    - fetchStrategyApr when rate decreases: returns 0
+    - fetchLiveApr: works with current block rate
+    - onlyKeeper access control
+
+  test/unit/AprPairFeed.test.ts
+    - updateRoundData: caches both APRs
+    - getAprPair: returns cached values
+    - getAprPair after staleAfter: reverts
+    - setManualApr: overrides providers
+    - clearManualOverride: resumes auto
+    - updateRoundData is permissionless
+
+Run compile + tests.
 ```
 
-**Verify:** compile + tests pass.
+**Verify:** compile + all 3 test files pass.
 
 ---
 
@@ -303,25 +347,31 @@ Run tests.
 
 ---
 
-## PROMPT 11 — BaseStrategy + SUSDeStrategy
+## PROMPT 11 — BaseStrategy + SUSDaiStrategy
 
 ```
 Do Steps 17-18 from docs/PV_V3_MVP_PLAN.md.
 Create contracts/strategies/BaseStrategy.sol and
-contracts/strategies/implementations/SUSDeStrategy.sol.
+contracts/strategies/implementations/SUSDaiStrategy.sol.
+
+SUSDaiStrategy specifics (from docs/PV_V3_APR_ORACLE.md section 9):
+- sUSDai: ERC-4626 deposit (synchronous) + ERC-7540 redeem (async ~7 days)
+- deposit(USDai) → sUSDai.deposit(amount, this) → get shares
+- withdraw sUSDai → instant transfer
+- withdraw USDai → sUSDai.requestRedeem() → 7 day cooldown → redeem()
 
 For testing, create test/helpers/mocks/MockERC4626.sol that simulates
-sUSDe vault — deposit USDe get shares, convertToAssets increases over
-time (simulating yield).
+sUSDai vault — deposit USDai get shares, convertToAssets increases over
+time. Add requestRedeem/redeem mock for ERC-7540 async flow.
 
-Write test/unit/SUSDeStrategy.test.ts:
-- deposit USDe → mints sUSDe shares internally
-- depositToken sUSDe → direct transfer
-- withdraw sUSDe → instant (WithdrawType.INSTANT)
-- withdraw USDe → returns UNSTAKE type (cooldown needed)
-- totalAssets → reflects sUSDe exchange rate
+Write test/unit/SUSDaiStrategy.test.ts:
+- deposit USDai → mints sUSDai shares internally
+- depositToken sUSDai → direct transfer
+- withdraw sUSDai → instant (WithdrawType.INSTANT)
+- withdraw USDai → returns UNSTAKE type (ERC-7540 async cooldown)
+- totalAssets → reflects sUSDai exchange rate
 - emergencyWithdraw → returns all to CDO
-- supportedTokens → [USDe, sUSDe]
+- supportedTokens → [USDai, sUSDai]
 - onlyCDO + pause checks
 
 Run tests.
@@ -353,19 +403,24 @@ Run tests.
 
 ---
 
-## PROMPT 13 — UnstakeCooldown + SUSDeCooldownRequestImpl
+## PROMPT 13 — UnstakeCooldown + SUSDaiCooldownRequestImpl
 
 ```
 Do Steps 13 + 16 from docs/PV_V3_MVP_PLAN.md.
 Create contracts/cooldown/UnstakeCooldown.sol and
-contracts/strategies/implementations/cooldown/SUSDeCooldownRequestImpl.sol.
+contracts/strategies/implementations/cooldown/SUSDaiCooldownRequestImpl.sol.
 
-For testing, create test/helpers/mocks/MockStakedUSDe.sol that
-simulates Ethena's cooldownShares/unstake/cooldownDuration interface.
+SUSDaiCooldownRequestImpl wraps sUSDai's ERC-7540 async redeem:
+  initiateCooldown() → sUSDai.requestRedeem(shares, receiver, this)
+  finalizeCooldown() → sUSDai.redeem(shares, receiver, this)
+  isCooldownComplete() → check if redeem is claimable
+
+For testing, create test/helpers/mocks/MockSUSDai.sol that
+simulates ERC-7540 requestRedeem/redeem with configurable cooldown.
 
 Write test/unit/UnstakeCooldown.test.ts:
 - request: calls impl.initiateCooldown, stores request
-- claim: calls impl.finalizeCooldown, transfers base asset
+- claim: calls impl.finalizeCooldown, transfers USDai
 - isClaimable: delegates to impl.isCooldownComplete
 - setImplementation: registers token → impl mapping
 - onlyAuthorized
@@ -556,27 +611,29 @@ Run tests.
 Do Step 29 from docs/PV_V3_MVP_PLAN.md.
 Create test/integration/FullFlow.test.ts.
 
-Fork Ethereum mainnet at latest block. Use real:
-- sUSDe: 0x9D39A5DE30e57443BfF2A8307A4256c8797A3497
-- USDe: 0x4c9EDD5852cd905f086C759E8383e09bff1E68B3
-- Aave v3 Pool: 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
-- WETH: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-- Chainlink ETH/USD: 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
+Fork Arbitrum mainnet at latest block. Use real:
+- sUSDai: 0x0B2b2B2076d95dda7817e785989fE353fe955ef9
+- USDai: 0x0A1a1A107E45b7Ced86833863f482BC5f4ed82EF
+- Aave v3 Pool: 0x794a61358D6845594F94dc1DB02A252b5b4814aD
+- WETH: 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
+- Chainlink ETH/USD: 0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612
 - Uniswap V3 Router: 0xE592427A0AEce92De3Edee1F18E0157C05861564
 
 Deploy full stack on fork. Use hardhat_impersonateAccount to get
-USDe + WETH for test users.
+USDai + WETH for test users (find whale addresses on Arbiscan).
 
 Test sequence:
-1. Deploy all contracts
+1. Deploy all contracts (including APR oracle with manual override for first 24h)
 2. User A: $10K Senior deposit
 3. User B: $5K Mezz deposit
-4. User C: $8K USDe + 0.67 WETH Junior deposit
-5. Advance time 7 days (hardhat_mine)
-6. Verify share prices increased for all tranches
-7. User A: withdraw Senior (instant at high coverage)
-8. User C: withdraw Junior (gets base + WETH)
-9. Verify all TVLs balance correctly
+4. User C: $8K USDai + 0.67 WETH Junior deposit
+5. Keeper: snapshot sUSDai rate + updateRoundData
+6. Advance time 7 days (hardhat_mine)
+7. Keeper: second snapshot + updateRoundData
+8. Verify share prices increased for all tranches
+9. User A: withdraw Senior (instant at high coverage)
+10. User C: withdraw Junior (gets USDai + WETH)
+11. Verify all TVLs balance correctly
 
 Run tests.
 ```
@@ -589,12 +646,12 @@ Run tests.
 Do Step 30 from docs/PV_V3_MVP_PLAN.md.
 Create test/integration/LossScenario.test.ts.
 
-Same fork setup as FullFlow.
+Same Arbitrum fork setup as FullFlow.
 
 Test sequence:
 1. Deploy + deposits into all tranches
-2. Simulate sUSDe de-peg by manipulating mock (or use a custom
-   strategy wrapper that can report lower totalAssets)
+2. Simulate sUSDai loss by using a wrapper strategy that can
+   report lower totalAssets (mock sUSDai rate decrease)
 3. Trigger updateTVL → loss detected
 4. Verify: WETH sold first (Layer 0)
 5. Verify: Junior base absorbed remainder (Layer 1)
@@ -618,23 +675,26 @@ deploy/01_deploy_shared.ts:
   RiskParams, WETHPriceOracle, SwapFacility,
   ERC20Cooldown, UnstakeCooldown, SharesCooldown
 
-deploy/02_deploy_ethena_market.ts:
-  AprPairFeed, Accounting, SUSDeStrategy,
-  SUSDeCooldownRequestImpl, AaveWETHAdapter,
-  RedemptionPolicy, PrimeCDO, TrancheVault × 3
+deploy/02_deploy_usdai_market.ts:
+  AaveAprProvider, SUSDaiAprProvider, AprPairFeed,
+  Accounting, SUSDaiStrategy, SUSDaiCooldownRequestImpl,
+  AaveWETHAdapter, RedemptionPolicy, PrimeCDO, TrancheVault × 3
 
 deploy/03_configure.ts:
   Register vaults in CDO, authorize cooldown contracts,
   set cooldown durations, configure redemption ranges,
-  set coverage gate params, set WETH ratio params
+  set coverage gate params, set WETH ratio params,
+  set manual APR override (first 24h),
+  set keeper in SUSDaiAprProvider
 
 scripts/verify-deployment.ts:
   Read all params, verify correct values, test $1 deposit/withdraw
 
 Use Viem for deployment (publicClient + walletClient).
+Target network: Arbitrum.
 Print all deployed addresses at the end.
 
-Run deploy on local hardhat node to verify.
+Run deploy on local hardhat node (Arbitrum fork) to verify.
 ```
 
 ---
@@ -675,20 +735,20 @@ Fix the file.
 ## Summary: 23 prompts, tuần tự
 
 ```
-#0   Session init (mỗi lần mở Claude Code)
+#0   Session init (mỗi lần mở Claude Code — Arbitrum + sUSDai context)
 #1   Project init
 #2   All interfaces
 #3   FixedPointMath + tests
 #4   RiskParams + tests
-#5   AprPairFeed + tests
+#5   APR Oracle: AaveAprProvider + SUSDaiAprProvider + AprPairFeed + tests
 #6   Accounting Part 1: state + views + tests
 #7   Accounting Part 2: APR + gain splitting + tests
 #8   WETHPriceOracle + mock + tests
 #9   AaveWETHAdapter + mock + tests
 #10  SwapFacility + mock + tests
-#11  BaseStrategy + SUSDeStrategy + mock + tests
+#11  BaseStrategy + SUSDaiStrategy + mock + tests
 #12  ERC20Cooldown + tests
-#13  UnstakeCooldown + SUSDeCooldownRequestImpl + mock + tests
+#13  UnstakeCooldown + SUSDaiCooldownRequestImpl + mock + tests
 #14  SharesCooldown + tests
 #15  RedemptionPolicy + tests
 #16  PrimeCDO Part 1: deposits + coverage gates + tests
@@ -696,9 +756,21 @@ Fix the file.
 #18  PrimeCDO Part 3: loss + rebalance + admin + tests
 #19  TrancheVault + tests
 #20  PrimeLens + tests
-#21  Integration: full flow (mainnet fork)
-#22  Integration: loss scenario (mainnet fork)
-#23  Deploy scripts + verify
+#21  Integration: full flow (Arbitrum fork)
+#22  Integration: loss scenario (Arbitrum fork)
+#23  Deploy scripts + verify (Arbitrum)
+```
+
+Docs needed in `docs/` folder:
+
+```
+docs/
+├── PV_V3_FINAL_v34.md         ← architecture
+├── PV_V3_COVERAGE_GATE.md     ← coverage gates
+├── PV_V3_MVP_PLAN.md          ← step-by-step plan
+├── PV_V3_MATH_REFERENCE.md    ← all formulas
+├── PV_V3_APR_ORACLE.md        ← APR oracle spec (sUSDai + Aave)
+└── CONVENTIONS.md              ← coding style
 ```
 
 Sau mỗi prompt: **compile → test → review → next prompt**.
