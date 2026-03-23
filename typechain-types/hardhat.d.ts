@@ -14,6 +14,18 @@ import * as Contracts from ".";
 declare module "hardhat/types/runtime" {
   interface HardhatEthersHelpers extends HardhatEthersHelpersBase {
     getContractFactory(
+      name: "Ownable",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Ownable__factory>;
+    getContractFactory(
+      name: "Ownable2Step",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Ownable2Step__factory>;
+    getContractFactory(
+      name: "RiskParams",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.RiskParams__factory>;
+    getContractFactory(
       name: "IAaveWETHAdapter",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IAaveWETHAdapter__factory>;
@@ -59,6 +71,21 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.FixedPointMathHarness__factory>;
 
     getContractAt(
+      name: "Ownable",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Ownable>;
+    getContractAt(
+      name: "Ownable2Step",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Ownable2Step>;
+    getContractAt(
+      name: "RiskParams",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.RiskParams>;
+    getContractAt(
       name: "IAaveWETHAdapter",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -115,6 +142,18 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.FixedPointMathHarness>;
 
     deployContract(
+      name: "Ownable",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Ownable>;
+    deployContract(
+      name: "Ownable2Step",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Ownable2Step>;
+    deployContract(
+      name: "RiskParams",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.RiskParams>;
+    deployContract(
       name: "IAaveWETHAdapter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IAaveWETHAdapter>;
@@ -159,6 +198,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.FixedPointMathHarness>;
 
+    deployContract(
+      name: "Ownable",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Ownable>;
+    deployContract(
+      name: "Ownable2Step",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Ownable2Step>;
+    deployContract(
+      name: "RiskParams",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.RiskParams>;
     deployContract(
       name: "IAaveWETHAdapter",
       args: any[],
