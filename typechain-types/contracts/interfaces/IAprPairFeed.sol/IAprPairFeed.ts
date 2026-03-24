@@ -117,7 +117,7 @@ export interface IAprPairFeed extends BaseContract {
   latestRoundData: TypedContractMethod<
     [],
     [IAprPairFeed.TRoundStructOutput],
-    "nonpayable"
+    "view"
   >;
 
   getFunction<T extends ContractMethod = ContractMethod>(
@@ -133,7 +133,7 @@ export interface IAprPairFeed extends BaseContract {
   >;
   getFunction(
     nameOrSignature: "latestRoundData"
-  ): TypedContractMethod<[], [IAprPairFeed.TRoundStructOutput], "nonpayable">;
+  ): TypedContractMethod<[], [IAprPairFeed.TRoundStructOutput], "view">;
 
   filters: {};
 }

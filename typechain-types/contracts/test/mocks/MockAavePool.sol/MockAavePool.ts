@@ -77,12 +77,16 @@ export declare namespace MockAavePool {
 
 export interface MockAavePoolInterface extends Interface {
   getFunction(
-    nameOrSignature: "getReserveData" | "setLiquidityRate"
+    nameOrSignature: "getReserveData" | "setAToken" | "setLiquidityRate"
   ): FunctionFragment;
 
   encodeFunctionData(
     functionFragment: "getReserveData",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setAToken",
+    values: [AddressLike, AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "setLiquidityRate",
@@ -93,6 +97,7 @@ export interface MockAavePoolInterface extends Interface {
     functionFragment: "getReserveData",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "setAToken", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "setLiquidityRate",
     data: BytesLike
@@ -148,6 +153,12 @@ export interface MockAavePool extends BaseContract {
     "view"
   >;
 
+  setAToken: TypedContractMethod<
+    [asset: AddressLike, aToken: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   setLiquidityRate: TypedContractMethod<
     [asset: AddressLike, rateRay: BigNumberish],
     [void],
@@ -164,6 +175,13 @@ export interface MockAavePool extends BaseContract {
     [asset: AddressLike],
     [MockAavePool.ReserveDataStructOutput],
     "view"
+  >;
+  getFunction(
+    nameOrSignature: "setAToken"
+  ): TypedContractMethod<
+    [asset: AddressLike, aToken: AddressLike],
+    [void],
+    "nonpayable"
   >;
   getFunction(
     nameOrSignature: "setLiquidityRate"

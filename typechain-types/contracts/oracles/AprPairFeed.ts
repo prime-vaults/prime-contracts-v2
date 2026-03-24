@@ -56,24 +56,25 @@ export interface AprPairFeedInterface extends Interface {
       | "getRoundData"
       | "grantRole"
       | "hasRole"
-      | "i_provider"
       | "latestRoundData"
       | "renounceRole"
       | "revokeRole"
       | "s_currentRoundId"
       | "s_oldestRoundId"
+      | "s_provider"
       | "s_rounds"
       | "s_sourcePref"
       | "s_staleAfter"
+      | "setProvider"
       | "setSourcePref"
       | "setStaleAfter"
       | "supportsInterface"
-      | "updateRoundData()"
-      | "updateRoundData(int64,int64,uint64)"
+      | "updateRoundData"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "ProviderUpdated"
       | "RoleAdminChanged"
       | "RoleGranted"
       | "RoleRevoked"
@@ -119,10 +120,6 @@ export interface AprPairFeedInterface extends Interface {
     values: [BytesLike, AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "i_provider",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "latestRoundData",
     values?: undefined
   ): string;
@@ -143,6 +140,10 @@ export interface AprPairFeedInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "s_provider",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "s_rounds",
     values: [BigNumberish]
   ): string;
@@ -153,6 +154,10 @@ export interface AprPairFeedInterface extends Interface {
   encodeFunctionData(
     functionFragment: "s_staleAfter",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setProvider",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "setSourcePref",
@@ -167,12 +172,8 @@ export interface AprPairFeedInterface extends Interface {
     values: [BytesLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "updateRoundData()",
+    functionFragment: "updateRoundData",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "updateRoundData(int64,int64,uint64)",
-    values: [BigNumberish, BigNumberish, BigNumberish]
   ): string;
 
   decodeFunctionResult(
@@ -202,7 +203,6 @@ export interface AprPairFeedInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "grantRole", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "hasRole", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "i_provider", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "latestRoundData",
     data: BytesLike
@@ -220,6 +220,7 @@ export interface AprPairFeedInterface extends Interface {
     functionFragment: "s_oldestRoundId",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "s_provider", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "s_rounds", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "s_sourcePref",
@@ -227,6 +228,10 @@ export interface AprPairFeedInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "s_staleAfter",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setProvider",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -242,13 +247,21 @@ export interface AprPairFeedInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "updateRoundData()",
+    functionFragment: "updateRoundData",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(
-    functionFragment: "updateRoundData(int64,int64,uint64)",
-    data: BytesLike
-  ): Result;
+}
+
+export namespace ProviderUpdatedEvent {
+  export type InputTuple = [provider: AddressLike];
+  export type OutputTuple = [provider: string];
+  export interface OutputObject {
+    provider: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace RoleAdminChangedEvent {
@@ -431,12 +444,10 @@ export interface AprPairFeed extends BaseContract {
     "view"
   >;
 
-  i_provider: TypedContractMethod<[], [string], "view">;
-
   latestRoundData: TypedContractMethod<
     [],
     [IAprPairFeed.TRoundStructOutput],
-    "nonpayable"
+    "view"
   >;
 
   renounceRole: TypedContractMethod<
@@ -455,6 +466,8 @@ export interface AprPairFeed extends BaseContract {
 
   s_oldestRoundId: TypedContractMethod<[], [bigint], "view">;
 
+  s_provider: TypedContractMethod<[], [string], "view">;
+
   s_rounds: TypedContractMethod<
     [arg0: BigNumberish],
     [
@@ -471,6 +484,12 @@ export interface AprPairFeed extends BaseContract {
   s_sourcePref: TypedContractMethod<[], [bigint], "view">;
 
   s_staleAfter: TypedContractMethod<[], [bigint], "view">;
+
+  setProvider: TypedContractMethod<
+    [provider_: AddressLike],
+    [void],
+    "nonpayable"
+  >;
 
   setSourcePref: TypedContractMethod<
     [pref: BigNumberish],
@@ -490,13 +509,7 @@ export interface AprPairFeed extends BaseContract {
     "view"
   >;
 
-  "updateRoundData()": TypedContractMethod<[], [void], "nonpayable">;
-
-  "updateRoundData(int64,int64,uint64)": TypedContractMethod<
-    [aprTarget: BigNumberish, aprBase: BigNumberish, timestamp: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
+  updateRoundData: TypedContractMethod<[], [void], "nonpayable">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
@@ -542,11 +555,8 @@ export interface AprPairFeed extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "i_provider"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
     nameOrSignature: "latestRoundData"
-  ): TypedContractMethod<[], [IAprPairFeed.TRoundStructOutput], "nonpayable">;
+  ): TypedContractMethod<[], [IAprPairFeed.TRoundStructOutput], "view">;
   getFunction(
     nameOrSignature: "renounceRole"
   ): TypedContractMethod<
@@ -568,6 +578,9 @@ export interface AprPairFeed extends BaseContract {
     nameOrSignature: "s_oldestRoundId"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "s_provider"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "s_rounds"
   ): TypedContractMethod<
     [arg0: BigNumberish],
@@ -588,6 +601,9 @@ export interface AprPairFeed extends BaseContract {
     nameOrSignature: "s_staleAfter"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "setProvider"
+  ): TypedContractMethod<[provider_: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "setSourcePref"
   ): TypedContractMethod<[pref: BigNumberish], [void], "nonpayable">;
   getFunction(
@@ -597,16 +613,16 @@ export interface AprPairFeed extends BaseContract {
     nameOrSignature: "supportsInterface"
   ): TypedContractMethod<[interfaceId: BytesLike], [boolean], "view">;
   getFunction(
-    nameOrSignature: "updateRoundData()"
+    nameOrSignature: "updateRoundData"
   ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "updateRoundData(int64,int64,uint64)"
-  ): TypedContractMethod<
-    [aprTarget: BigNumberish, aprBase: BigNumberish, timestamp: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
 
+  getEvent(
+    key: "ProviderUpdated"
+  ): TypedContractEvent<
+    ProviderUpdatedEvent.InputTuple,
+    ProviderUpdatedEvent.OutputTuple,
+    ProviderUpdatedEvent.OutputObject
+  >;
   getEvent(
     key: "RoleAdminChanged"
   ): TypedContractEvent<
@@ -651,6 +667,17 @@ export interface AprPairFeed extends BaseContract {
   >;
 
   filters: {
+    "ProviderUpdated(address)": TypedContractEvent<
+      ProviderUpdatedEvent.InputTuple,
+      ProviderUpdatedEvent.OutputTuple,
+      ProviderUpdatedEvent.OutputObject
+    >;
+    ProviderUpdated: TypedContractEvent<
+      ProviderUpdatedEvent.InputTuple,
+      ProviderUpdatedEvent.OutputTuple,
+      ProviderUpdatedEvent.OutputObject
+    >;
+
     "RoleAdminChanged(bytes32,bytes32,bytes32)": TypedContractEvent<
       RoleAdminChangedEvent.InputTuple,
       RoleAdminChangedEvent.OutputTuple,

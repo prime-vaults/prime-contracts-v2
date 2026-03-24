@@ -4,8 +4,8 @@ pragma solidity ^0.8.24;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
- * @dev Mock Aave v3 Pool that returns configurable currentLiquidityRate per asset.
- *      Rates are set in ray (1e27) to match real Aave behavior.
+ * @dev Mock Aave v3 Pool that returns configurable currentLiquidityRate and aTokenAddress per asset.
+ *      Rates are set in ray (1e27). aTokenAddress read from getReserveData (not hardcoded).
  */
 contract MockAavePool {
     struct ReserveData {
@@ -26,14 +26,20 @@ contract MockAavePool {
         uint128 isolationModeTotalDebt;
     }
 
-    mapping(address => uint128) private _rates; // ray scale
+    mapping(address => uint128) private _rates;
+    mapping(address => address) private _aTokens;
 
     function setLiquidityRate(address asset, uint128 rateRay) external {
         _rates[asset] = rateRay;
     }
 
+    function setAToken(address asset, address aToken) external {
+        _aTokens[asset] = aToken;
+    }
+
     function getReserveData(address asset) external view returns (ReserveData memory data) {
         data.currentLiquidityRate = _rates[asset];
+        data.aTokenAddress = _aTokens[asset];
     }
 }
 

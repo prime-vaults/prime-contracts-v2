@@ -126,18 +126,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.AprPairFeed__factory>;
     getContractFactory(
-      name: "AaveAprProvider",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.AaveAprProvider__factory>;
-    getContractFactory(
-      name: "IAavePool",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IAavePool__factory>;
-    getContractFactory(
-      name: "ERC4626AprProvider",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ERC4626AprProvider__factory>;
-    getContractFactory(
       name: "IAavePool",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IAavePool__factory>;
@@ -299,21 +287,6 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.AprPairFeed>;
     getContractAt(
-      name: "AaveAprProvider",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.AaveAprProvider>;
-    getContractAt(
-      name: "IAavePool",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.IAavePool>;
-    getContractAt(
-      name: "ERC4626AprProvider",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.ERC4626AprProvider>;
-    getContractAt(
       name: "IAavePool",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -451,18 +424,6 @@ declare module "hardhat/types/runtime" {
       name: "AprPairFeed",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.AprPairFeed>;
-    deployContract(
-      name: "AaveAprProvider",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.AaveAprProvider>;
-    deployContract(
-      name: "IAavePool",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IAavePool>;
-    deployContract(
-      name: "ERC4626AprProvider",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ERC4626AprProvider>;
     deployContract(
       name: "IAavePool",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -624,21 +585,6 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.AprPairFeed>;
-    deployContract(
-      name: "AaveAprProvider",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.AaveAprProvider>;
-    deployContract(
-      name: "IAavePool",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IAavePool>;
-    deployContract(
-      name: "ERC4626AprProvider",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ERC4626AprProvider>;
     deployContract(
       name: "IAavePool",
       args: any[],

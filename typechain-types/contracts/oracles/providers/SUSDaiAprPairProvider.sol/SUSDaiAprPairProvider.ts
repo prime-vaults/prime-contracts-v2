@@ -25,13 +25,13 @@ import type {
 export interface SUSDaiAprPairProviderInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "BENCHMARK_MAX"
+      | "benchmarkTokenCount"
       | "getAprPair"
-      | "i_aUsdc"
-      | "i_aUsdt"
+      | "getAprPairView"
       | "i_aavePool"
-      | "i_usdc"
-      | "i_usdt"
       | "i_vault"
+      | "s_benchmarkTokens"
       | "s_latestSnapshot"
       | "s_prevSnapshot"
   ): FunctionFragment;
@@ -39,18 +39,30 @@ export interface SUSDaiAprPairProviderInterface extends Interface {
   getEvent(nameOrSignatureOrTopic: "SnapshotShifted"): EventFragment;
 
   encodeFunctionData(
+    functionFragment: "BENCHMARK_MAX",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "benchmarkTokenCount",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "getAprPair",
     values?: undefined
   ): string;
-  encodeFunctionData(functionFragment: "i_aUsdc", values?: undefined): string;
-  encodeFunctionData(functionFragment: "i_aUsdt", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "getAprPairView",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "i_aavePool",
     values?: undefined
   ): string;
-  encodeFunctionData(functionFragment: "i_usdc", values?: undefined): string;
-  encodeFunctionData(functionFragment: "i_usdt", values?: undefined): string;
   encodeFunctionData(functionFragment: "i_vault", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "s_benchmarkTokens",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "s_latestSnapshot",
     values?: undefined
@@ -60,13 +72,25 @@ export interface SUSDaiAprPairProviderInterface extends Interface {
     values?: undefined
   ): string;
 
+  decodeFunctionResult(
+    functionFragment: "BENCHMARK_MAX",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "benchmarkTokenCount",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "getAprPair", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "i_aUsdc", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "i_aUsdt", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getAprPairView",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "i_aavePool", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "i_usdc", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "i_usdt", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "i_vault", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "s_benchmarkTokens",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "s_latestSnapshot",
     data: BytesLike
@@ -142,6 +166,10 @@ export interface SUSDaiAprPairProvider extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  BENCHMARK_MAX: TypedContractMethod<[], [bigint], "view">;
+
+  benchmarkTokenCount: TypedContractMethod<[], [bigint], "view">;
+
   getAprPair: TypedContractMethod<
     [],
     [
@@ -154,17 +182,27 @@ export interface SUSDaiAprPairProvider extends BaseContract {
     "nonpayable"
   >;
 
-  i_aUsdc: TypedContractMethod<[], [string], "view">;
-
-  i_aUsdt: TypedContractMethod<[], [string], "view">;
+  getAprPairView: TypedContractMethod<
+    [],
+    [
+      [bigint, bigint, bigint] & {
+        aprTarget: bigint;
+        aprBase: bigint;
+        timestamp: bigint;
+      }
+    ],
+    "view"
+  >;
 
   i_aavePool: TypedContractMethod<[], [string], "view">;
 
-  i_usdc: TypedContractMethod<[], [string], "view">;
-
-  i_usdt: TypedContractMethod<[], [string], "view">;
-
   i_vault: TypedContractMethod<[], [string], "view">;
+
+  s_benchmarkTokens: TypedContractMethod<
+    [arg0: BigNumberish],
+    [string],
+    "view"
+  >;
 
   s_latestSnapshot: TypedContractMethod<
     [],
@@ -183,6 +221,12 @@ export interface SUSDaiAprPairProvider extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "BENCHMARK_MAX"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "benchmarkTokenCount"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "getAprPair"
   ): TypedContractMethod<
     [],
@@ -196,23 +240,27 @@ export interface SUSDaiAprPairProvider extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "i_aUsdc"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "i_aUsdt"
-  ): TypedContractMethod<[], [string], "view">;
+    nameOrSignature: "getAprPairView"
+  ): TypedContractMethod<
+    [],
+    [
+      [bigint, bigint, bigint] & {
+        aprTarget: bigint;
+        aprBase: bigint;
+        timestamp: bigint;
+      }
+    ],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "i_aavePool"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "i_usdc"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "i_usdt"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
     nameOrSignature: "i_vault"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "s_benchmarkTokens"
+  ): TypedContractMethod<[arg0: BigNumberish], [string], "view">;
   getFunction(
     nameOrSignature: "s_latestSnapshot"
   ): TypedContractMethod<

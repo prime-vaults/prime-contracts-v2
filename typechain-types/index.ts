@@ -62,12 +62,8 @@ export type { FixedPointMathHarness } from "./contracts/libraries/FixedPointMath
 export { FixedPointMathHarness__factory } from "./factories/contracts/libraries/FixedPointMathHarness__factory";
 export type { AprPairFeed } from "./contracts/oracles/AprPairFeed";
 export { AprPairFeed__factory } from "./factories/contracts/oracles/AprPairFeed__factory";
-export type { AaveAprProvider } from "./contracts/oracles/providers/AaveAprProvider.sol/AaveAprProvider";
-export { AaveAprProvider__factory } from "./factories/contracts/oracles/providers/AaveAprProvider.sol/AaveAprProvider__factory";
-export type { IAavePool } from "./contracts/oracles/providers/AaveAprProvider.sol/IAavePool";
-export { IAavePool__factory } from "./factories/contracts/oracles/providers/AaveAprProvider.sol/IAavePool__factory";
-export type { ERC4626AprProvider } from "./contracts/oracles/providers/ERC4626AprProvider";
-export { ERC4626AprProvider__factory } from "./factories/contracts/oracles/providers/ERC4626AprProvider__factory";
+export type { IAavePool } from "./contracts/oracles/providers/SUSDaiAprPairProvider.sol/IAavePool";
+export { IAavePool__factory } from "./factories/contracts/oracles/providers/SUSDaiAprPairProvider.sol/IAavePool__factory";
 export type { SUSDaiAprPairProvider } from "./contracts/oracles/providers/SUSDaiAprPairProvider.sol/SUSDaiAprPairProvider";
 export { SUSDaiAprPairProvider__factory } from "./factories/contracts/oracles/providers/SUSDaiAprPairProvider.sol/SUSDaiAprPairProvider__factory";
 export type { MockAavePool } from "./contracts/test/mocks/MockAavePool.sol/MockAavePool";

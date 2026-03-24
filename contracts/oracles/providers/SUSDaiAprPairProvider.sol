@@ -12,7 +12,7 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IStrategyAprPairProvider} from "../../interfaces/IAprPairFeed.sol";
 
 /**
- * @dev Minimal Aave v3 Pool interface for reading reserve data.
+ * @dev Minimal Aave v3 Pool interface — aTokenAddress read from getReserveData (not hardcoded).
  */
 interface IAavePool {
     struct ReserveData {
@@ -39,10 +39,12 @@ interface IAavePool {
 /**
  * @title SUSDaiAprPairProvider
  * @notice Computes (aprTarget, aprBase) for sUSDai market in Strata-compatible format.
- * @dev aprTarget: Aave USDC+USDT supply-weighted average (realtime, like Strata getAPRtarget).
- *      aprBase: sUSDai exchange rate growth between snapshots (annualized).
- *      Returns int64 with 12 decimals. Supports negative APR (rate decrease).
- *      getAprPair() is state-changing — shifts snapshots on each call.
+ * @dev Design fixes vs naive Strata copy:
+ *      #1 TWO entry points: getAprPair() (mutate) + getAprPairView() (view)
+ *      #2 aTokenAddress read from Aave getReserveData(), not hardcoded
+ *      #3 Benchmark APR capped at BENCHMARK_MAX (40%)
+ *      #4 Strategy APR clamped to [APR_MIN, APR_MAX] before int64 cast
+ *      Returns int64 × 12 decimals. 1% = 1e10.
  */
 contract SUSDaiAprPairProvider is IStrategyAprPairProvider {
     // ═══════════════════════════════════════════════════════════════════
@@ -58,25 +60,25 @@ contract SUSDaiAprPairProvider is IStrategyAprPairProvider {
     //  CONSTANTS
     // ═══════════════════════════════════════════════════════════════════
 
-    uint256 private constant RAY_TO_12DEC = 1e15;  // 1e27 → 1e12
+    uint256 private constant RAY_TO_12DEC = 1e15;       // 1e27 → 1e12
     uint256 private constant PRECISION = 1e12;
     uint256 private constant YEAR = 365 days;
+    int256 private constant APR_MIN = -500_000_000_000;  // -50% in 12dec
+    int256 private constant APR_MAX = 2_000_000_000_000; // +200% in 12dec
+    int64 public constant BENCHMARK_MAX = 400_000_000_000; // 40% in 12dec
 
     // ═══════════════════════════════════════════════════════════════════
     //  IMMUTABLES
     // ═══════════════════════════════════════════════════════════════════
 
     IAavePool public immutable i_aavePool;
-    address public immutable i_usdc;
-    address public immutable i_usdt;
-    address public immutable i_aUsdc;
-    address public immutable i_aUsdt;
     IERC4626 public immutable i_vault;
 
     // ═══════════════════════════════════════════════════════════════════
     //  STATE
     // ═══════════════════════════════════════════════════════════════════
 
+    address[] public s_benchmarkTokens;
     RateSnapshot public s_prevSnapshot;
     RateSnapshot public s_latestSnapshot;
 
@@ -90,20 +92,18 @@ contract SUSDaiAprPairProvider is IStrategyAprPairProvider {
     //  CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════
 
-    constructor(
-        address aavePool_,
-        address usdc_,
-        address usdt_,
-        address aUsdc_,
-        address aUsdt_,
-        address vault_
-    ) {
+    /**
+     * @param aavePool_ Aave v3 Pool address
+     * @param benchmarkTokens_ Array of underlying tokens for benchmark (e.g., [USDC, USDT])
+     * @param vault_ ERC-4626 vault address (e.g., sUSDai)
+     */
+    constructor(address aavePool_, address[] memory benchmarkTokens_, address vault_) {
         i_aavePool = IAavePool(aavePool_);
-        i_usdc = usdc_;
-        i_usdt = usdt_;
-        i_aUsdc = aUsdc_;
-        i_aUsdt = aUsdt_;
         i_vault = IERC4626(vault_);
+
+        for (uint256 i = 0; i < benchmarkTokens_.length; i++) {
+            s_benchmarkTokens.push(benchmarkTokens_[i]);
+        }
 
         // Seed first snapshot
         uint256 currentRate = IERC4626(vault_).convertToAssets(1e18);
@@ -111,23 +111,17 @@ contract SUSDaiAprPairProvider is IStrategyAprPairProvider {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  IStrategyAprPairProvider
+    //  getAprPair — STATE-CHANGING (shifts snapshots)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Compute APR pair. State-changing: shifts sUSDai snapshots.
-     * @dev aprTarget = Aave USDC+USDT weighted avg (realtime, no snapshot needed).
-     *      aprBase = sUSDai annualized growth from snapshots. Negative if rate decreased.
-     *      First call after deploy: aprBase = 0 (only 1 snapshot exists).
-     * @return aprTarget Benchmark APR, int64 × 12 decimals
-     * @return aprBase Strategy APR, int64 × 12 decimals
-     * @return timestamp Current block timestamp
+     * @notice Compute APR pair and shift snapshots. Called by AprPairFeed PULL update.
+     * @dev Shifts prev ← latest, latest ← current live rate.
      */
     function getAprPair() external override returns (int64 aprTarget, int64 aprBase, uint64 timestamp) {
-        // --- aprTarget: Aave weighted average (realtime) ---
-        aprTarget = _getAaveApr();
+        aprTarget = _computeBenchmarkApr();
 
-        // --- Shift sUSDai snapshots ---
+        // Shift snapshots
         uint256 prevRate = s_latestSnapshot.rate;
         uint256 prevTimestamp = s_latestSnapshot.timestamp;
 
@@ -137,54 +131,98 @@ contract SUSDaiAprPairProvider is IStrategyAprPairProvider {
 
         emit SnapshotShifted(prevRate, currentRate, block.timestamp);
 
-        // --- aprBase: annualized growth ---
-        if (s_prevSnapshot.timestamp == 0 || prevTimestamp == 0) {
-            // First call — no prev snapshot to compare against
-            return (aprTarget, 0, uint64(block.timestamp));
-        }
-
-        uint256 deltaT = block.timestamp - prevTimestamp;
-        if (deltaT == 0 || prevRate == 0) {
-            return (aprTarget, 0, uint64(block.timestamp));
-        }
-
-        // Growth = (currentRate / prevRate - 1), supports negative
-        // In 1e12 precision: growth = (currentRate - prevRate) * 1e12 / prevRate
-        int256 growth = (int256(currentRate) - int256(prevRate)) * int256(PRECISION) / int256(prevRate);
-        // APR = growth × YEAR / deltaT
-        int256 apr = growth * int256(YEAR) / int256(deltaT);
-
-        aprBase = int64(apr);
+        aprBase = _computeStrategyApr(currentRate, prevRate, prevTimestamp);
         timestamp = uint64(block.timestamp);
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  INTERNAL
+    //  getAprPairView — PURE VIEW (no snapshot shift)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @dev Compute Aave USDC+USDT supply-weighted average APR.
-     *      Reads currentLiquidityRate (ray) → converts to int64 × 12 decimals.
+     * @notice Read current APR pair without modifying state.
+     * @dev Uses existing s_prevSnapshot and s_latestSnapshot. No shift.
+     *      Called by AprPairFeed.latestRoundData() fallback and setProvider() compat check.
      */
-    function _getAaveApr() internal view returns (int64) {
-        uint256 rateUsdc = _getSupplyRate(i_usdc);
-        uint256 rateUsdt = _getSupplyRate(i_usdt);
+    function getAprPairView() external view override returns (int64 aprTarget, int64 aprBase, uint64 timestamp) {
+        aprTarget = _computeBenchmarkApr();
+        aprBase = _computeStrategyApr(s_latestSnapshot.rate, s_prevSnapshot.rate, s_prevSnapshot.timestamp);
+        timestamp = uint64(s_latestSnapshot.timestamp);
+    }
 
-        uint256 supplyUsdc = IERC20(i_aUsdc).totalSupply();
-        uint256 supplyUsdt = IERC20(i_aUsdt).totalSupply();
-        uint256 totalSupply = supplyUsdc + supplyUsdt;
+    // ═══════════════════════════════════════════════════════════════════
+    //  INTERNAL — Benchmark APR
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @dev Compute Aave supply-weighted average APR from benchmarkTokens[].
+     *      aTokenAddress read from getReserveData (fix #2). Capped at BENCHMARK_MAX (fix #3).
+     */
+    function _computeBenchmarkApr() internal view returns (int64) {
+        uint256 weightedSum;
+        uint256 totalSupply;
+
+        for (uint256 i = 0; i < s_benchmarkTokens.length; i++) {
+            address token = s_benchmarkTokens[i];
+            IAavePool.ReserveData memory data = i_aavePool.getReserveData(token);
+
+            uint256 rate = uint256(data.currentLiquidityRate) / RAY_TO_12DEC;
+            uint256 supply = IERC20(data.aTokenAddress).totalSupply();
+
+            weightedSum += supply * rate;
+            totalSupply += supply;
+        }
 
         if (totalSupply == 0) return 0;
 
-        uint256 weightedAvg = (supplyUsdc * rateUsdc + supplyUsdt * rateUsdt) / totalSupply;
-        return int64(int256(weightedAvg));
+        int64 apr = int64(int256(weightedSum / totalSupply));
+
+        // Cap at BENCHMARK_MAX (fix #3)
+        if (apr > BENCHMARK_MAX) apr = BENCHMARK_MAX;
+
+        return apr;
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    //  INTERNAL — Strategy APR
+    // ═══════════════════════════════════════════════════════════════════
+
     /**
-     * @dev Read Aave currentLiquidityRate (ray, 1e27) → convert to 1e12 scale.
+     * @dev Compute annualized growth between two rate points.
+     *      Supports negative APR. Clamped to [APR_MIN, APR_MAX] before int64 cast (fix #4).
      */
-    function _getSupplyRate(address asset) internal view returns (uint256) {
-        IAavePool.ReserveData memory data = i_aavePool.getReserveData(asset);
-        return uint256(data.currentLiquidityRate) / RAY_TO_12DEC;
+    function _computeStrategyApr(uint256 currentRate, uint256 prevRate, uint256 prevTimestamp) internal view returns (int64) {
+        if (prevTimestamp == 0 || prevRate == 0) return 0;
+
+        uint256 deltaT;
+        // For view path: compare latest vs prev snapshot timestamps
+        if (currentRate == s_latestSnapshot.rate && s_latestSnapshot.timestamp > prevTimestamp) {
+            deltaT = s_latestSnapshot.timestamp - prevTimestamp;
+        } else {
+            // For mutate path: compare block.timestamp vs prevTimestamp
+            deltaT = block.timestamp - prevTimestamp;
+        }
+
+        if (deltaT == 0) return 0;
+
+        // Growth = (currentRate - prevRate) * PRECISION / prevRate (supports negative)
+        int256 growth = (int256(currentRate) - int256(prevRate)) * int256(PRECISION) / int256(prevRate);
+        // APR = growth × YEAR / deltaT
+        int256 apr = growth * int256(YEAR) / int256(deltaT);
+
+        // Clamp to bounds before int64 cast (fix #4 — prevents silent overflow)
+        if (apr < APR_MIN) apr = APR_MIN;
+        if (apr > APR_MAX) apr = APR_MAX;
+
+        return int64(apr);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  VIEW HELPERS
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** @notice Number of benchmark tokens configured. */
+    function benchmarkTokenCount() external view returns (uint256) {
+        return s_benchmarkTokens.length;
     }
 }

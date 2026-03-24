@@ -32,6 +32,29 @@ const _abi = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  {
+    inputs: [],
+    name: "getAprPairView",
+    outputs: [
+      {
+        internalType: "int64",
+        name: "aprTarget",
+        type: "int64",
+      },
+      {
+        internalType: "int64",
+        name: "aprBase",
+        type: "int64",
+      },
+      {
+        internalType: "uint64",
+        name: "timestamp",
+        type: "uint64",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
 export class IStrategyAprPairProvider__factory {

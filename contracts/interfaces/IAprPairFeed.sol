@@ -12,17 +12,29 @@ pragma solidity ^0.8.24;
  * @notice Interface for strategy-specific APR pair providers (Strata-compatible).
  * @dev Returns (aprTarget, aprBase) in int64 with 12 decimals.
  *      1% = 0.01 × 1e12 = 1e10. Supports negative APR (yield decrease).
- *      getAprPair() is state-changing — shifts internal snapshots on each call.
+ *      Two entry points:
+ *        getAprPair()     — state-changing (shifts snapshots). Called by Feed PULL update.
+ *        getAprPairView() — pure view (reads existing snapshots). Called by Feed fallback.
  */
 interface IStrategyAprPairProvider {
     /**
-     * @notice Compute and return the current APR pair.
-     * @dev State-changing: may shift internal snapshots. Called by AprPairFeed.
+     * @notice Compute and return the current APR pair (state-changing).
+     * @dev Shifts internal snapshots. Called by AprPairFeed.updateRoundData() (PULL mode).
      * @return aprTarget Benchmark APR (Aave weighted avg), int64 × 12 decimals
      * @return aprBase Strategy APR (vault yield), int64 × 12 decimals
      * @return timestamp Timestamp of the data point
      */
     function getAprPair() external returns (int64 aprTarget, int64 aprBase, uint64 timestamp);
+
+    /**
+     * @notice Read current APR pair without modifying state (view).
+     * @dev Reads existing snapshots only. Called by AprPairFeed.latestRoundData() fallback
+     *      and setProvider() compatibility check. No side effects.
+     * @return aprTarget Benchmark APR (Aave weighted avg), int64 × 12 decimals
+     * @return aprBase Strategy APR (vault yield), int64 × 12 decimals
+     * @return timestamp Timestamp of latest snapshot
+     */
+    function getAprPairView() external view returns (int64 aprTarget, int64 aprBase, uint64 timestamp);
 }
 
 /**
@@ -32,13 +44,6 @@ interface IStrategyAprPairProvider {
  *      Accounting reads latestRoundData() to get current APR pair.
  */
 interface IAprPairFeed {
-    /**
-     * @notice A single APR data round.
-     * @param roundId Sequential round identifier
-     * @param aprTarget Benchmark APR, int64 × 12 decimals
-     * @param aprBase Strategy APR, int64 × 12 decimals
-     * @param timestamp Data timestamp
-     */
     struct TRound {
         uint64 roundId;
         int64 aprTarget;
@@ -46,29 +51,14 @@ interface IAprPairFeed {
         uint64 timestamp;
     }
 
-    /**
-     * @notice Source preference for latestRoundData().
-     * @dev Feed: prefer cached feed data (PUSH), fall back to provider if stale.
-     *      Strategy: always call provider (PULL).
-     */
     enum ESourcePref {
         Feed,
         Strategy
     }
 
-    /**
-     * @notice Get the latest APR round data.
-     * @dev If sourcePref == Feed: returns cached round if not stale, else calls provider.
-     *      If sourcePref == Strategy: always calls provider.
-     * @return round The latest TRound
-     */
-    function latestRoundData() external returns (TRound memory round);
+    /** @notice Get the latest APR round data (may call provider view as fallback). */
+    function latestRoundData() external view returns (TRound memory round);
 
-    /**
-     * @notice Get a historical APR round by ID.
-     * @dev Reverts if round has been overwritten in the circular buffer.
-     * @param roundId The round to retrieve
-     * @return round The requested TRound
-     */
+    /** @notice Get a historical APR round by ID. Reverts if overwritten. */
     function getRoundData(uint64 roundId) external view returns (TRound memory round);
 }

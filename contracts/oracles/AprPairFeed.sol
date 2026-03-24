@@ -13,12 +13,10 @@ import {IAprPairFeed, IStrategyAprPairProvider} from "../interfaces/IAprPairFeed
 /**
  * @title AprPairFeed
  * @notice Strata-compatible dual-source APR feed with circular buffer history.
- * @dev Two update modes:
- *      PUSH — UPDATER_FEED_ROLE calls updateRoundData(aprTarget, aprBase, timestamp)
- *      PULL — UPDATER_FEED_ROLE calls updateRoundData() which calls provider.getAprPair()
- *      latestRoundData() behavior depends on sourcePref:
- *        Feed mode: returns cached round if not stale, else falls back to provider
- *        Strategy mode: always calls provider directly
+ * @dev Design fix #1: latestRoundData() fallback calls getAprPairView() (view, no side effects).
+ *      updateRoundData() calls getAprPair() (state-changing, shifts provider snapshots).
+ *      setProvider() calls getAprPairView() for compatibility check (no side effects).
+ *      PULL-only: UPDATER_FEED_ROLE calls updateRoundData() → provider.getAprPair()
  *      APR values: int64 × 12 decimals. Bounds: [-50%, +200%].
  *      20-round circular buffer for historical access.
  */
@@ -30,19 +28,14 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
     bytes32 public constant UPDATER_FEED_ROLE = keccak256("UPDATER_FEED_ROLE");
     uint256 public constant MAX_ROUNDS = 20;
 
-    // APR bounds: int64 × 12 decimals. 1% = 1e10
-    int64 public constant APR_LOWER_BOUND = -500_000_000_000; // -50%
+    int64 public constant APR_LOWER_BOUND = -500_000_000_000;  // -50%
     int64 public constant APR_UPPER_BOUND = 2_000_000_000_000; // +200%
-
-    // ═══════════════════════════════════════════════════════════════════
-    //  IMMUTABLES
-    // ═══════════════════════════════════════════════════════════════════
-
-    IStrategyAprPairProvider public immutable i_provider;
 
     // ═══════════════════════════════════════════════════════════════════
     //  STATE
     // ═══════════════════════════════════════════════════════════════════
+
+    IStrategyAprPairProvider public s_provider;
 
     TRound[20] public s_rounds;
     uint64 public s_currentRoundId;
@@ -58,6 +51,7 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
     event RoundUpdated(uint64 indexed roundId, int64 aprTarget, int64 aprBase, uint64 timestamp);
     event SourcePrefUpdated(ESourcePref pref);
     event StaleAfterUpdated(uint256 staleAfter);
+    event ProviderUpdated(address provider);
 
     // ═══════════════════════════════════════════════════════════════════
     //  ERRORS
@@ -73,7 +67,7 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
     // ═══════════════════════════════════════════════════════════════════
 
     constructor(address provider_, address admin_, uint256 staleAfter_) {
-        i_provider = IStrategyAprPairProvider(provider_);
+        s_provider = IStrategyAprPairProvider(provider_);
         s_staleAfter = staleAfter_;
         s_sourcePref = ESourcePref.Feed;
 
@@ -82,33 +76,16 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  UPDATE — PUSH MODE (external observer sends APR)
+    //  UPDATE — PULL from provider
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @notice PUSH mode: store APR data from an external observer.
-     * @dev Only callable by UPDATER_FEED_ROLE. Validates bounds and timestamp ordering.
-     * @param aprTarget Benchmark APR, int64 × 12 decimals
-     * @param aprBase Strategy APR, int64 × 12 decimals
-     * @param timestamp Data timestamp (must be > last stored timestamp)
-     */
-    function updateRoundData(int64 aprTarget, int64 aprBase, uint64 timestamp) external onlyRole(UPDATER_FEED_ROLE) {
-        _validateBounds(aprTarget);
-        _validateBounds(aprBase);
-        _validateTimestamp(timestamp);
-        _storeRound(aprTarget, aprBase, timestamp);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    //  UPDATE — PULL MODE (call provider)
-    // ═══════════════════════════════════════════════════════════════════
-
-    /**
-     * @notice PULL mode: fetch APR from the strategy provider and store.
-     * @dev Only callable by UPDATER_FEED_ROLE. Calls provider.getAprPair() which is state-changing.
+     * @notice Fetch APR from provider (state-changing) and store as new round.
+     * @dev Calls getAprPair() which shifts provider snapshots. This is intentional —
+     *      updateRoundData is the mechanism that advances the provider's snapshot window.
      */
     function updateRoundData() external onlyRole(UPDATER_FEED_ROLE) {
-        (int64 aprTarget, int64 aprBase, uint64 timestamp) = i_provider.getAprPair();
+        (int64 aprTarget, int64 aprBase, uint64 timestamp) = s_provider.getAprPair();
         _validateBounds(aprTarget);
         _validateBounds(aprBase);
         _validateTimestamp(timestamp);
@@ -121,14 +98,13 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
 
     /**
      * @notice Get the latest APR round data.
-     * @dev Feed mode: returns cached round if not stale, else falls back to provider.
-     *      Strategy mode: always calls provider (state-changing).
-     * @return round The latest TRound
+     * @dev Feed mode: returns cached round if fresh, else calls getAprPairView() (no side effects).
+     *      Strategy mode: always calls getAprPairView() (no side effects).
+     *      Fix #1: fallback uses getAprPairView(), NOT getAprPair(). No snapshot shift on read.
      */
-    function latestRoundData() external override returns (TRound memory round) {
+    function latestRoundData() external view override returns (TRound memory round) {
         if (s_sourcePref == ESourcePref.Strategy) {
-            // Always pull fresh from provider
-            (int64 aprTarget, int64 aprBase, uint64 timestamp) = i_provider.getAprPair();
+            (int64 aprTarget, int64 aprBase, uint64 timestamp) = s_provider.getAprPairView();
             return TRound({roundId: 0, aprTarget: aprTarget, aprBase: aprBase, timestamp: timestamp});
         }
 
@@ -138,18 +114,16 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
         uint256 idx = (s_currentRoundId - 1) % MAX_ROUNDS;
         round = s_rounds[idx];
 
-        // If stale, fall back to provider
+        // If stale, fall back to provider VIEW (no side effects)
         if (block.timestamp - uint256(round.timestamp) > s_staleAfter) {
-            (int64 aprTarget, int64 aprBase, uint64 timestamp) = i_provider.getAprPair();
+            (int64 aprTarget, int64 aprBase, uint64 timestamp) = s_provider.getAprPairView();
             return TRound({roundId: 0, aprTarget: aprTarget, aprBase: aprBase, timestamp: timestamp});
         }
     }
 
     /**
      * @notice Get a historical APR round by ID.
-     * @dev Reverts if round has been overwritten in the circular buffer.
      * @param roundId The round to retrieve
-     * @return round The requested TRound
      */
     function getRoundData(uint64 roundId) external view override returns (TRound memory round) {
         if (roundId == 0 || roundId > s_currentRoundId || roundId < s_oldestRoundId) {
@@ -159,7 +133,6 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
         uint256 idx = (roundId - 1) % MAX_ROUNDS;
         round = s_rounds[idx];
 
-        // Verify the round wasn't overwritten
         if (round.roundId != roundId) revert PrimeVaults__RoundNotAvailable(roundId);
     }
 
@@ -168,8 +141,19 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
+     * @notice Set a new provider. Calls getAprPairView() for compatibility check (no side effects).
+     * @param provider_ New provider address
+     */
+    function setProvider(address provider_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        IStrategyAprPairProvider newProvider = IStrategyAprPairProvider(provider_);
+        // Compatibility check — view call, no side effects
+        newProvider.getAprPairView();
+        s_provider = newProvider;
+        emit ProviderUpdated(provider_);
+    }
+
+    /**
      * @notice Set the source preference for latestRoundData().
-     * @param pref Feed (prefer cached) or Strategy (always pull)
      */
     function setSourcePref(ESourcePref pref) external onlyRole(DEFAULT_ADMIN_ROLE) {
         s_sourcePref = pref;
@@ -178,7 +162,6 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
 
     /**
      * @notice Update the staleness threshold for Feed mode.
-     * @param staleAfter_ New staleness duration in seconds
      */
     function setStaleAfter(uint256 staleAfter_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         s_staleAfter = staleAfter_;
@@ -207,14 +190,8 @@ contract AprPairFeed is AccessControl, IAprPairFeed {
         s_currentRoundId++;
         uint256 idx = (s_currentRoundId - 1) % MAX_ROUNDS;
 
-        s_rounds[idx] = TRound({
-            roundId: s_currentRoundId,
-            aprTarget: aprTarget,
-            aprBase: aprBase,
-            timestamp: timestamp
-        });
+        s_rounds[idx] = TRound({roundId: s_currentRoundId, aprTarget: aprTarget, aprBase: aprBase, timestamp: timestamp});
 
-        // Track oldest available round
         if (s_currentRoundId > uint64(MAX_ROUNDS)) {
             s_oldestRoundId = s_currentRoundId - uint64(MAX_ROUNDS) + 1;
         } else if (s_oldestRoundId == 0) {

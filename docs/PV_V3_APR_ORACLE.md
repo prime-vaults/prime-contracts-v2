@@ -1,6 +1,6 @@
 # PrimeVaults V3 — APR Oracle
 
-**Version:** 3.5.0 (final)  
+**Version:** 3.5.1  
 **Inherits:** Strata `AprPairFeed` (PUSH+PULL, 20-round buffer, bounds, int64×12dec)  
 **Custom:** `SUSDaiAprPairProvider` (snapshot-based, vì sUSDai không có vesting API)
 
@@ -15,6 +15,7 @@ Strata (sUSDe — Ethena):
     ✓ lastDistributionTimestamp()   → khi nào distribute
     ✓ totalAssets()
   → Tính APR realtime, pure view, KHÔNG cần snapshot
+  → getAprPair() là pure view → AprPairFeed.latestRoundData() gọi được trực tiếp
 
 sUSDai (USD.AI):
   sUSDai expose:
@@ -22,9 +23,8 @@ sUSDai (USD.AI):
     ✗ getUnvestedAmount()           → KHÔNG CÓ
     ✗ lastDistributionTimestamp()   → KHÔNG CÓ
   → Yield tích luỹ qua exchange rate, PHẢI dùng snapshot
-
-→ AprPairFeed: copy Strata 100%
-→ Provider: custom cho sUSDai (snapshot exchange rate)
+  → getAprPair() là state-changing (shift snapshots)
+  → CẦN tách: getAprPair() (mutate) + getAprPairView() (view cho fallback)
 ```
 
 ---
@@ -32,39 +32,77 @@ sUSDai (USD.AI):
 ## 2. Architecture
 
 ```
-                    ┌─── PUSH: off-chain observer tính APR, gọi updateRoundData(apr, apr, t)
-                    │         (dùng khi cần APR chính xác, hoặc emergency override)
+                    ┌─── PUSH: off-chain observer gọi updateRoundData(apr, apr, t)
                     │
 AprPairFeed ────────┤
                     │
-                    └─── PULL: gọi provider.getAprPair() tự động khi PUSH data stale
-                              │
-                              └── SUSDaiAprPairProvider
-                                    ├── aprTarget: Aave USDC+USDT weighted avg (realtime view)
-                                    └── aprBase: sUSDai exchange rate growth (từ snapshots)
+                    └─── PULL: 2 paths
+                           │
+                           ├── updateRoundData() → provider.getAprPair()
+                           │     (state-changing: shifts snapshots + caches)
+                           │
+                           └── latestRoundData() fallback → provider.getAprPairView()
+                                 (view: reads current snapshots WITHOUT shifting)
 
 latestRoundData():
-  IF sourcePref == Feed AND cache not stale → return cache (PUSH data)
-  ELSE → call provider.getAprPair() trực tiếp (PULL fallback)
+  IF sourcePref == Feed AND cache not stale → return cache
+  ELSE → call provider.getAprPairView() (view, no mutation)
 
-→ Không bao giờ stuck. Nếu keeper down → PULL tự động.
-→ Nếu provider broken → PUSH override vẫn hoạt động.
+→ Không bao giờ stuck. View fallback luôn hoạt động.
+→ Snapshots chỉ shift khi keeper gọi updateRoundData() (PULL).
 ```
 
 ---
 
-## 3. AprPairFeed — Copy Strata
+## 3. Interface
 
-**File:** `contracts/oracles/AprPairFeed.sol`  
-**Copy Strata 100%,** chỉ thay AccessControlled bằng OZ AccessControl.
+**File:** `contracts/interfaces/IAprPairFeed.sol`
+
+```solidity
+/// @dev Strata-compatible interface, extended with view fallback for snapshot-based providers
+
+interface IStrategyAprPairProvider {
+    /// @notice Get APR pair — MAY be state-changing (snapshot shift)
+    /// @dev    Called by AprPairFeed.updateRoundData() (PULL mode)
+    function getAprPair() external returns (int64 aprTarget, int64 aprBase, uint64 timestamp);
+
+    /// @notice Get APR pair — pure view, reads from current snapshots without shifting
+    /// @dev    Called by AprPairFeed.latestRoundData() as fallback
+    ///         For Strata-style providers (pure view): identical to getAprPair()
+    ///         For snapshot-based providers: reads existing snapshots, no mutation
+    function getAprPairView() external view returns (int64 aprTarget, int64 aprBase, uint64 timestamp);
+}
+
+interface IAprPairFeed {
+    struct TRound {
+        int64 aprTarget;
+        int64 aprBase;
+        uint64 updatedAt;
+        uint64 answeredInRound;
+    }
+
+    function latestRoundData() external view returns (TRound memory);
+    function getRoundData(uint64 roundId) external view returns (TRound memory);
+}
+```
+
+---
+
+## 4. AprPairFeed — Copy Strata + view fallback fix
+
+**File:** `contracts/oracles/AprPairFeed.sol`
+
+**Thay đổi so với Strata:** `latestRoundData()` gọi `getAprPairView()` thay vì `getAprPair()`.
 
 ```solidity
 /// @title AprPairFeed
 /// @author PrimeVaults Team
 /// @notice Manages APR Pair data with dual-source: PUSH (external) + PULL (provider)
-/// @dev    Copied from Strata AprPairFeed. PUSH data preferred, PULL fallback when stale.
+/// @dev    Based on Strata AprPairFeed. PUSH data preferred, PULL fallback when stale.
 ///         20-round circular buffer for audit trail. Bounds checking [-50%, +200%].
 ///         Uses int64 with 12 decimals for APR values (Strata-compatible).
+///         Difference from Strata: latestRoundData() calls getAprPairView() instead of
+///         getAprPair(), because our provider is state-changing (snapshot shifts).
 
 contract AprPairFeed is IAprPairFeed, AccessControl {
 
@@ -74,7 +112,7 @@ contract AprPairFeed is IAprPairFeed, AccessControl {
 
     int64 private constant APR_BOUNDARY_MAX =    2e12;   // 200%
     int64 private constant APR_BOUNDARY_MIN = -0.5e12;   // -50%
-    uint64 private constant MAX_FUTURE_DRIFT = 60;       // 60s clock skew tolerance
+    uint64 private constant MAX_FUTURE_DRIFT = 60;
     uint8 public constant ROUNDS_CAP = 20;
     uint8 public constant DECIMALS = 12;
 
@@ -144,10 +182,10 @@ contract AprPairFeed is IAprPairFeed, AccessControl {
     //  READ — Accounting calls this
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice Get latest APR pair — prefers PUSH data, falls back to PULL
-    /// @dev    If sourcePref == Feed AND cache not stale → return cache
-    ///         Otherwise → call provider.getAprPair() directly (PULL)
-    /// @return round Latest round data
+    /// @notice Get latest APR pair — prefers PUSH cache, falls back to provider VIEW
+    /// @dev    Uses getAprPairView() for fallback (not getAprPair()) because
+    ///         our provider is state-changing. View fallback reads existing snapshots
+    ///         without shifting them.
     function latestRoundData() external view returns (TRound memory) {
         TRound memory round = s_latestRound;
 
@@ -156,10 +194,10 @@ contract AprPairFeed is IAprPairFeed, AccessControl {
             if (deltaT < s_roundStaleAfter) {
                 return round;
             }
-            // falls back to strategy ↓
         }
 
-        (int64 aprTarget, int64 aprBase, uint64 t1) = s_provider.getAprPair();
+        // Fallback: call VIEW function (no state mutation)
+        (int64 aprTarget, int64 aprBase, uint64 t1) = s_provider.getAprPairView();
         _ensureValid(aprTarget);
         _ensureValid(aprBase);
         return TRound({
@@ -180,25 +218,19 @@ contract AprPairFeed is IAprPairFeed, AccessControl {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  PUSH — external observer sends APR (sets sourcePref = Feed)
+    //  PUSH — external observer sends APR
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice Push APR values from off-chain observer
-    /// @dev    Access: UPDATER_FEED_ROLE only
-    ///         Sets sourcePref to Feed — latestRoundData() will prefer this data
-    ///         Also serves as emergency override (replaces setManualApr)
     function updateRoundData(int64 aprTarget, int64 aprBase, uint64 timestamp) external onlyRole(UPDATER_FEED_ROLE) {
         _updateRoundDataInner(aprTarget, aprBase, timestamp);
         _ensureSourcePref(ESourcePref.Feed);
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  PULL — fetch from provider (sets sourcePref = Strategy)
+    //  PULL — fetch from provider (state-changing: shifts snapshots)
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice Pull APR from strategy provider
-    /// @dev    Access: UPDATER_FEED_ROLE only
-    ///         Sets sourcePref to Strategy — latestRoundData() will always call provider
+    /// @dev Calls getAprPair() which shifts provider snapshots
     function updateRoundData() external onlyRole(UPDATER_FEED_ROLE) {
         (int64 aprTarget, int64 aprBase, uint64 t) = s_provider.getAprPair();
         _updateRoundDataInner(aprTarget, aprBase, t);
@@ -251,8 +283,9 @@ contract AprPairFeed is IAprPairFeed, AccessControl {
     //  ADMIN
     // ═══════════════════════════════════════════════════════════════
 
+    /// @dev Calls getAprPairView() for compatibility check (view, no side effect)
     function setProvider(IStrategyAprPairProvider provider_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        (int64 aprTarget, int64 aprBase, ) = provider_.getAprPair();
+        (int64 aprTarget, int64 aprBase, ) = provider_.getAprPairView();
         _ensureValid(aprTarget);
         _ensureValid(aprBase);
         s_provider = provider_;
@@ -268,41 +301,28 @@ contract AprPairFeed is IAprPairFeed, AccessControl {
 
 ---
 
-## 4. SUSDaiAprPairProvider — Custom cho sUSDai
+## 5. SUSDaiAprPairProvider — Fixed
 
 **File:** `contracts/oracles/providers/SUSDaiAprPairProvider.sol`
 
-### Tại sao khác Strata's AaveAprPairProvider
+### Fixes applied
 
 ```
-Strata (sUSDe): getAPRbase() dùng sUSDe.getUnvestedAmount()
-  → Pure view, realtime, không cần snapshot
-  → Vì Ethena distribute yield qua 8h vesting period
-  → Đọc "còn bao nhiêu chưa vest" → APR
-
-sUSDai: KHÔNG có getUnvestedAmount()
-  → Yield tích luỹ qua exchange rate tăng dần
-  → PHẢI so sánh 2 thời điểm: rate(T0) vs rate(T1)
-  → CẦN snapshot mechanism
-
-NHƯNG: snapshot nằm TRONG provider (internal), KHÔNG cần keeper riêng.
-AprPairFeed.updateRoundData() → provider.getAprPair() → snapshot + compute.
-1 keeper call = snapshot + APR + cache. Giống Strata.
+#1 CRITICAL:  getAprPairView() added — view function for PULL fallback
+#2 MEDIUM:    benchmarkTokens[] + aTokenAddress from getReserveData (not hardcoded)
+#3 LOW:       Bounds check on benchmark (cap 40%)
+#4 LOW:       Clamp APR to [-50%, +200%] before int64 cast
 ```
-
-### Spec
 
 ```solidity
 /// @title SUSDaiAprPairProvider
 /// @author PrimeVaults Team
 /// @notice Provides benchmark APR (Aave) + strategy APR (sUSDai) for PrimeVaults
-/// @dev    Benchmark: Aave v3 Arbitrum USDC+USDT supply rate weighted avg (realtime view)
+/// @dev    Benchmark: Aave v3 Arbitrum supply rate weighted avg (realtime view)
 ///         Base: sUSDai exchange rate growth between 2 snapshots, annualized
-///         Snapshot happens inside getAprPair() — no separate keeper call needed
-///         Unlike Strata's sUSDe provider, sUSDai doesn't expose vesting API,
-///         so we use rate delta instead.
-///
-///         Interface: IStrategyAprPairProvider (same as Strata)
+///         Two entry points:
+///           getAprPair()     — state-changing, shifts snapshots (called by Feed PULL update)
+///           getAprPairView() — pure view, reads existing snapshots (called by Feed fallback)
 ///         APR units: int64, 12 decimals (Strata-compatible)
 
 contract SUSDaiAprPairProvider is IStrategyAprPairProvider {
@@ -315,16 +335,20 @@ contract SUSDaiAprPairProvider is IStrategyAprPairProvider {
     uint256 private constant PRECISION = 1e18;
     uint256 private constant APR_SCALE = 1e12;
 
+    int256 private constant APR_CLAMP_MAX = 2e12;      // +200%
+    int256 private constant APR_CLAMP_MIN = -0.5e12;   // -50%
+    uint256 private constant BENCHMARK_MAX = 0.4e12;    // 40% max benchmark
+
     // ═══════════════════════════════════════════════════════════════
     //  IMMUTABLES
     // ═══════════════════════════════════════════════════════════════
 
-    IAavePool public immutable i_aave;
+    IAavePool public immutable i_aavePool;
     IERC4626 public immutable i_sUSDai;
-    address[] public i_benchmarkTokens;       // [USDC, USDT]
+    address[] public i_benchmarkTokens;              // [USDC, USDT]
 
     // ═══════════════════════════════════════════════════════════════
-    //  STATE — sUSDai exchange rate snapshots
+    //  STATE
     // ═══════════════════════════════════════════════════════════════
 
     uint256 public s_prevRate;
@@ -336,167 +360,155 @@ contract SUSDaiAprPairProvider is IStrategyAprPairProvider {
     //  EVENTS
     // ═══════════════════════════════════════════════════════════════
 
-    event RateSnapshotted(uint256 rate, uint256 timestamp);
+    event SnapshotShifted(uint256 prevRate, uint256 newRate, uint256 timestamp);
 
     // ═══════════════════════════════════════════════════════════════
     //  CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════
 
-    /// @dev Seeds first sUSDai rate snapshot at deploy
-    constructor(IAavePool aave_, address[] memory benchmarkTokens_, IERC4626 sUSDai_) {
-        i_aave = aave_;
+    constructor(IAavePool aavePool_, address[] memory benchmarkTokens_, IERC4626 sUSDai_) {
+        i_aavePool = aavePool_;
         i_benchmarkTokens = benchmarkTokens_;
         i_sUSDai = sUSDai_;
 
-        // Seed first snapshot
         s_latestRate = sUSDai_.convertToAssets(PRECISION);
         s_latestTimestamp = block.timestamp;
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  IStrategyAprPairProvider (Strata interface)
+    //  STATE-CHANGING — called by AprPairFeed.updateRoundData() PULL
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice Get both APRs — snapshots sUSDai rate as side effect
-    /// @dev    Called by AprPairFeed.updateRoundData() (PULL mode)
-    ///         State-changing: shifts sUSDai exchange rate snapshots
-    ///         aprTarget: Aave weighted avg (realtime view, no snapshot)
-    ///         aprBase: sUSDai annualized growth from snapshots
-    /// @return aprTarget Benchmark APR, int64, 12 decimals
-    /// @return aprBase Strategy APR, int64, 12 decimals
-    /// @return timestamp Current block timestamp
-    function getAprPair() external returns (int64 aprTarget, int64 aprBase, uint64 timestamp) {
-        timestamp = uint64(block.timestamp);
-        aprTarget = _getAPRtarget();
-        aprBase = _getAPRbase();
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  BENCHMARK — Aave weighted average
-    // ═══════════════════════════════════════════════════════════════
-
-    /// @notice Aave USDC+USDT supply rate, supply-weighted average
-    /// @dev    Same logic as Strata's AaveAprPairProvider.getAPRtarget()
-    ///         Pure view — no snapshot needed
-    function _getAPRtarget() internal view returns (int64) {
-        uint256 totalWeight = 0;
-        uint256 weightedSum = 0;
-        for (uint256 i = 0; i < i_benchmarkTokens.length; i++) {
-            (uint256 apr, uint256 totalSupply) = _getAaveAsset(i);
-            weightedSum += apr * totalSupply;
-            totalWeight += totalSupply;
-        }
-        if (totalWeight == 0) return 0;
-        uint256 aprAvg = weightedSum / totalWeight;
-        return int64(int256(aprAvg));
-    }
-
-    /// @dev Fetch raw Aave reserve data: APR (12 dec) + total supplied
-    function _getAaveAsset(uint256 i) internal view returns (uint256 apr, uint256 totalSupply) {
-        address asset = i_benchmarkTokens[i];
-        (
-            , , uint128 currentLiquidityRate, , , , , ,
-            address aTokenAddress, , , , , ,
-        ) = i_aave.getReserveData(asset);
-
-        uint256 ONE_in = 1e27;    // Aave ray
-        uint256 ONE_out = 1e12;   // our decimals
-        apr = uint256(currentLiquidityRate) * ONE_out / ONE_in;
-        totalSupply = IERC20(aTokenAddress).totalSupply();
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  STRATEGY — sUSDai exchange rate growth
-    // ═══════════════════════════════════════════════════════════════
-
-    /// @notice sUSDai APR from exchange rate snapshots
-    /// @dev    Unlike Strata's sUSDe (which uses getUnvestedAmount for realtime APR),
-    ///         sUSDai doesn't expose vesting internals. We compare exchange rates instead.
-    ///
-    ///         Formula (same as Strata tranches_math.md):
-    ///           Growth_Factor = ExchangeRate_T1 / ExchangeRate_T0 - 1
-    ///           APR = Growth_Factor / (T1 - T0) * 1Year
-    ///
-    ///         Side effect: shifts snapshots (prev ← latest, latest ← current)
-    ///         Returns 0 if: no prev snapshot, deltaT = 0, or rate decreased
-    function _getAPRbase() internal returns (int64) {
-        uint256 currentRate = i_sUSDai.convertToAssets(PRECISION);
-
+    /// @notice Get APR pair + shift snapshots
+    /// @dev    Shifts prev ← latest, latest ← current sUSDai rate.
+    ///         ONLY called by AprPairFeed.updateRoundData() (no-args PULL).
+    function getAprPair() external override returns (int64 aprTarget, int64 aprBase, uint64 timestamp) {
         // Shift snapshots
         s_prevRate = s_latestRate;
         s_prevTimestamp = s_latestTimestamp;
+
+        uint256 currentRate = i_sUSDai.convertToAssets(PRECISION);
         s_latestRate = currentRate;
         s_latestTimestamp = block.timestamp;
 
-        emit RateSnapshotted(currentRate, block.timestamp);
+        emit SnapshotShifted(s_prevRate, currentRate, block.timestamp);
 
-        // Need 2 valid snapshots
+        // Compute APRs from new state
+        aprTarget = _computeBenchmarkApr();
+        aprBase = _computeStrategyApr();
+        timestamp = uint64(block.timestamp);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  VIEW — called by AprPairFeed.latestRoundData() fallback
+    // ═══════════════════════════════════════════════════════════════
+
+    /// @notice Get APR pair WITHOUT shifting snapshots
+    /// @dev    Reads existing snapshots. No state mutation.
+    ///         Used by AprPairFeed.latestRoundData() which is a view function.
+    function getAprPairView() external view override returns (int64 aprTarget, int64 aprBase, uint64 timestamp) {
+        aprTarget = _computeBenchmarkApr();
+        aprBase = _computeStrategyApr();
+        timestamp = uint64(block.timestamp);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  BENCHMARK — Aave weighted average (view)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// @dev Aave supply rate weighted by aToken totalSupply
+    ///      aTokenAddress read from Aave getReserveData (not hardcoded)
+    ///      Capped at BENCHMARK_MAX (40%)
+    function _computeBenchmarkApr() internal view returns (int64) {
+        uint256 totalWeight = 0;
+        uint256 weightedSum = 0;
+
+        for (uint256 i = 0; i < i_benchmarkTokens.length; i++) {
+            (uint256 apr, uint256 supply) = _getAaveAsset(i);
+            weightedSum += apr * supply;
+            totalWeight += supply;
+        }
+
+        if (totalWeight == 0) return 0;
+
+        uint256 aprAvg = weightedSum / totalWeight;
+
+        // Bounds: cap at 40%, match Strata's BOUND_MAX
+        if (aprAvg > BENCHMARK_MAX) aprAvg = BENCHMARK_MAX;
+
+        return int64(int256(aprAvg));
+    }
+
+    /// @dev Read APR + totalSupply from Aave reserve
+    ///      aTokenAddress from getReserveData — not hardcoded as immutable
+    function _getAaveAsset(uint256 i) internal view returns (uint256 apr, uint256 totalSupply) {
+        address asset = i_benchmarkTokens[i];
+        IAavePool.ReserveData memory data = i_aavePool.getReserveData(asset);
+
+        // currentLiquidityRate: ray (1e27) → 12 decimals (1e12)
+        apr = uint256(data.currentLiquidityRate) * APR_SCALE / 1e27;
+
+        // aToken totalSupply from Aave (not hardcoded address)
+        totalSupply = IERC20(data.aTokenAddress).totalSupply();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  STRATEGY — sUSDai exchange rate growth (view)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// @dev Reads current snapshots, computes annualized growth
+    ///      Supports negative APR. Clamps to [-50%, +200%] before int64 cast.
+    ///      View function — does NOT shift snapshots.
+    function _computeStrategyApr() internal view returns (int64) {
         if (s_prevTimestamp == 0 || s_prevRate == 0) return 0;
 
         uint256 deltaT = s_latestTimestamp - s_prevTimestamp;
         if (deltaT == 0) return 0;
 
-        // Rate decreased → negative yield
-        if (s_latestRate < s_prevRate) {
-            uint256 loss = (s_prevRate - s_latestRate) * SECONDS_PER_YEAR * APR_SCALE
-                / deltaT / s_prevRate;
-            return -int64(int256(loss));
+        int256 apr;
+
+        if (s_latestRate >= s_prevRate) {
+            // Positive yield
+            uint256 growth = (s_latestRate - s_prevRate) * SECONDS_PER_YEAR * APR_SCALE / deltaT / s_prevRate;
+            apr = int256(growth);
+        } else {
+            // Negative yield
+            uint256 loss = (s_prevRate - s_latestRate) * SECONDS_PER_YEAR * APR_SCALE / deltaT / s_prevRate;
+            apr = -int256(loss);
         }
 
-        // Rate increased → positive yield
-        uint256 growth = (s_latestRate - s_prevRate) * SECONDS_PER_YEAR * APR_SCALE
-            / deltaT / s_prevRate;
-        return int64(int256(growth));
+        // Clamp to safe int64 range, matching AprPairFeed bounds
+        if (apr > APR_CLAMP_MAX) apr = APR_CLAMP_MAX;
+        if (apr < APR_CLAMP_MIN) apr = APR_CLAMP_MIN;
+
+        return int64(apr);
     }
 }
-```
 
-### Key differences from Strata's AaveAprPairProvider
+// ═══════════════════════════════════════════════════════════════════
+//  Minimal Aave v3 interface
+// ═══════════════════════════════════════════════════════════════════
 
-```
-Strata sUSDe:
-  getAPRbase():
-    unvestedAmount = sUSDe.getUnvestedAmount()
-    totalAssets = sUSDe.totalAssets()
-    apr = unvestedAmount × SECONDS_PER_YEAR / (VESTING_PERIOD - deltaT) / totalAssets
-    → Pure view. Realtime. No state.
-
-PrimeVaults sUSDai:
-  _getAPRbase():
-    currentRate = sUSDai.convertToAssets(1e18)
-    shift snapshots
-    apr = (currentRate - prevRate) × SECONDS_PER_YEAR / deltaT / prevRate
-    → State-changing (snapshots). Needs previous call for baseline.
-    → Supports negative APR (returns int64 < 0 if rate decreased)
-```
-
----
-
-## 5. Interface
-
-**File:** `contracts/interfaces/IAprPairFeed.sol`
-
-```solidity
-/// @dev Strata-compatible interface
-
-interface IStrategyAprPairProvider {
-    /// @notice Get APR pair from strategy
-    /// @return aprTarget Benchmark APR, int64, 12 decimals
-    /// @return aprBase Strategy APR, int64, 12 decimals
-    /// @return timestamp Update timestamp
-    function getAprPair() external returns (int64 aprTarget, int64 aprBase, uint64 timestamp);
-}
-
-interface IAprPairFeed {
-    struct TRound {
-        int64 aprTarget;
-        int64 aprBase;
-        uint64 updatedAt;
-        uint64 answeredInRound;
+interface IAavePool {
+    struct ReserveData {
+        uint256 configuration;
+        uint128 liquidityIndex;
+        uint128 currentLiquidityRate;
+        uint128 variableBorrowIndex;
+        uint128 currentVariableBorrowRate;
+        uint128 currentStableBorrowRate;
+        uint40 lastUpdateTimestamp;
+        uint16 id;
+        address aTokenAddress;
+        address stableDebtTokenAddress;
+        address variableDebtTokenAddress;
+        address interestRateStrategyAddress;
+        uint128 accruedToTreasury;
+        uint128 unbacked;
+        uint128 isolationModeTotalDebt;
     }
 
-    function latestRoundData() external view returns (TRound memory);
-    function getRoundData(uint64 roundId) external view returns (TRound memory);
+    function getReserveData(address asset) external view returns (ReserveData memory);
 }
 ```
 
@@ -504,16 +516,11 @@ interface IAprPairFeed {
 
 ## 6. Accounting Integration
 
-Accounting đọc APR từ AprPairFeed, cần convert int64×12dec → uint256×18dec:
-
 ```solidity
-// Trong Accounting._computeSeniorAPR():
-
 function _readAprPair() internal view returns (uint256 aprTarget, uint256 aprBase) {
     IAprPairFeed.TRound memory round = IAprPairFeed(i_aprFeed).latestRoundData();
 
-    // int64 (12 dec) → uint256 (18 dec)
-    // Negative APR → clamp to 0 for Senior target (Senior floor protects)
+    // int64 (12 dec) → uint256 (18 dec). Negative → clamp to 0.
     aprTarget = round.aprTarget > 0 ? uint256(int256(round.aprTarget)) * 1e6 : 0;
     aprBase = round.aprBase > 0 ? uint256(int256(round.aprBase)) * 1e6 : 0;
 }
@@ -524,98 +531,117 @@ function _readAprPair() internal view returns (uint256 aprTarget, uint256 aprBas
 ## 7. Flow
 
 ```
-NORMAL OPERATION (PULL mode):
+NORMAL (PULL):
 
   Keeper (UPDATER_FEED_ROLE) mỗi 24h:
-    AprPairFeed.updateRoundData()          // no-args = PULL
-      └── provider.getAprPair()
-            ├── Aave weighted avg → aprTarget (realtime)
-            ├── Shift sUSDai snapshots → compute aprBase
-            └── return (aprTarget, aprBase, timestamp)
-      └── Store in round buffer
-      └── sourcePref = Strategy
+    AprPairFeed.updateRoundData()                       // no-args = PULL
+      └── provider.getAprPair()                          // STATE-CHANGING
+            ├── shift snapshots: prev ← latest, latest ← current
+            ├── _computeBenchmarkApr() → Aave weighted avg
+            └── _computeStrategyApr() → annualized growth from snapshots
+      └── Store in round buffer, sourcePref = Strategy
 
-  Accounting reads:
-    AprPairFeed.latestRoundData()
-      └── sourcePref == Strategy → call provider.getAprPair() live
-      └── Return realtime data
+  Accounting reads (mỗi user action):
+    AprPairFeed.latestRoundData()                       // VIEW
+      └── sourcePref == Strategy → provider.getAprPairView()  // VIEW
+            ├── _computeBenchmarkApr() → Aave realtime
+            └── _computeStrategyApr() → from EXISTING snapshots (no shift)
 
 
-EMERGENCY / PRECISE OVERRIDE (PUSH mode):
+EMERGENCY (PUSH):
 
   Observer (UPDATER_FEED_ROLE):
-    AprPairFeed.updateRoundData(aprTarget, aprBase, timestamp)  // with args = PUSH
-      └── Store in round buffer
-      └── sourcePref = Feed
+    AprPairFeed.updateRoundData(aprTarget, aprBase, timestamp)
+      └── Store in round buffer, sourcePref = Feed
 
   Accounting reads:
     AprPairFeed.latestRoundData()
-      └── sourcePref == Feed, cache not stale → return cache
-      └── Nếu stale → auto fallback to provider.getAprPair()
+      └── sourcePref == Feed, not stale → return cache
+      └── if stale → fallback provider.getAprPairView()
 
 
 KEEPER DOWN:
 
-  latestRoundData():
-    sourcePref == Feed → cache stale → fallback to provider
-    sourcePref == Strategy → call provider directly (always fresh)
-  → KHÔNG BAO GIỜ STUCK. Automatic fallback.
+  sourcePref == Feed → cache stale → fallback getAprPairView() ✓
+  sourcePref == Strategy → always calls getAprPairView() ✓
+  → NEVER STUCK
 ```
 
 ---
 
-## 8. So sánh Final
+## 8. Fixes Summary
+
+```
+#1 CRITICAL — View/mutate separation
+   Problem:  latestRoundData() is view but called getAprPair() which mutates state
+   Fix:      Added getAprPairView() (view) for fallback, getAprPair() (mutate) for update
+   Where:    Interface, AprPairFeed.latestRoundData(), Provider dual functions
+
+#2 MEDIUM — Hardcoded aToken addresses
+   Problem:  If Aave upgrades aToken → reads wrong totalSupply
+   Fix:      Read aTokenAddress from getReserveData() per call, use benchmarkTokens[] array
+   Where:    Provider._getAaveAsset(), removed i_aUsdc/i_aUsdt immutables
+
+#3 LOW — No bounds check in provider
+   Problem:  Abnormal Aave rate passes through unchecked
+   Fix:      BENCHMARK_MAX = 40% cap in _computeBenchmarkApr()
+   Where:    Provider._computeBenchmarkApr()
+
+#4 LOW — int64 overflow on cast
+   Problem:  Large APR silently truncated on int64 cast
+   Fix:      Clamp to [-50%, +200%] before cast, matching AprPairFeed bounds
+   Where:    Provider._computeStrategyApr()
+```
+
+---
+
+## 9. Strata vs PrimeVaults — Final Comparison
 
 ```
                         Strata                  PrimeVaults
 ────────────────────────────────────────────────────────────────
-AprPairFeed             Copy 100%               Copy 100%
+AprPairFeed             Copy                    Copy + getAprPairView fallback
   PUSH + PULL           ✓                       ✓
   20-round buffer       ✓                       ✓
   Bounds [-50%, 200%]   ✓                       ✓
   int64 × 12 dec        ✓                       ✓
   UPDATER_FEED_ROLE     ✓                       ✓
-  Auto fallback         ✓                       ✓
 
-Provider                AaveAprPairProvider     SUSDaiAprPairProvider
-  aprTarget source      Aave weighted avg       Aave weighted avg (same)
-  aprBase source        sUSDe vesting API       sUSDai exchange rate snapshots
-  State                 Stateless (pure view)   Stateful (snapshots)
-  Negative APR          Returns 0               Returns int64 < 0
-  getAprPair() mutates  No                      Yes (shifts snapshots)
+Provider                Pure view               Dual: mutate + view
+  aprTarget             Aave weighted avg       Aave weighted avg
+  aprBase               sUSDe vesting API       sUSDai snapshot growth
+  getAprPair()          view                    state-changing (shifts)
+  getAprPairView()      N/A (not needed)        view (for fallback)
+  Benchmark bounds      BOUND_MAX = 40%         BENCHMARK_MAX = 40%
+  APR clamp             Not needed (uint)       [-50%, +200%] (int)
+  aToken address        From getReserveData     From getReserveData
+  benchmarkTokens[]     ✓                       ✓
 ```
 
 ---
 
-## 9. Deployment
+## 10. Deployment
 
 ```
-1. SUSDaiAprPairProvider
-   constructor(aavePool, [USDC, USDT], sUSDai)
-   → Seeds first sUSDai snapshot
+1. SUSDaiAprPairProvider(aavePool, [USDC, USDT], sUSDai)
+   → Seeds first snapshot
 
-2. AprPairFeed
-   constructor(admin, provider, staleAfter=48h, "PrimeVaults sUSDai Market")
-   → Grant UPDATER_FEED_ROLE to keeper address
+2. AprPairFeed(admin, provider, staleAfter=48h, "PrimeVaults sUSDai Market")
+   → Grant UPDATER_FEED_ROLE to keeper
 
-3. First 24h:
-   Keeper: updateRoundData(4e10, 12e10, timestamp)    // PUSH with estimated APRs
-   → sourcePref = Feed
+3. First 24h: PUSH mode
+   updateRoundData(4e10, 12e10, timestamp)
 
-4. After 24h:
-   Keeper: updateRoundData()                           // PULL (no args)
-   → First real snapshot pair
-   → sourcePref = Strategy
+4. After 24h: PULL mode
+   updateRoundData()  → first real snapshot pair
 
-5. After 48h:
-   Keeper: updateRoundData()                           // PULL
-   → 2 valid snapshots → aprBase accurate
-   → System fully autonomous
+5. After 48h: fully autonomous
+   updateRoundData()  → 2 valid snapshots → aprBase accurate
 ```
 
 ---
 
-## 10. Arbitrum Addresses
+## 11. Arbitrum Addresses
 
 ```
 Aave v3 Pool:   0x794a61358D6845594F94dc1DB02A252b5b4814aD
@@ -626,6 +652,6 @@ sUSDai:         0x0B2b2B2076d95dda7817e785989fE353fe955ef9
 
 ---
 
-_PrimeVaults V3 — APR Oracle v3.5.0 (final)_  
-_AprPairFeed: Strata copy • Provider: custom sUSDai snapshots_  
+_PrimeVaults V3 — APR Oracle v3.5.1_  
+_AprPairFeed: Strata copy + view fallback • Provider: dual mutate/view_  
 _March 2026_

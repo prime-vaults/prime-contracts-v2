@@ -20,14 +20,24 @@ import type {
 } from "../../../common";
 
 export interface IStrategyAprPairProviderInterface extends Interface {
-  getFunction(nameOrSignature: "getAprPair"): FunctionFragment;
+  getFunction(
+    nameOrSignature: "getAprPair" | "getAprPairView"
+  ): FunctionFragment;
 
   encodeFunctionData(
     functionFragment: "getAprPair",
     values?: undefined
   ): string;
+  encodeFunctionData(
+    functionFragment: "getAprPairView",
+    values?: undefined
+  ): string;
 
   decodeFunctionResult(functionFragment: "getAprPair", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getAprPairView",
+    data: BytesLike
+  ): Result;
 }
 
 export interface IStrategyAprPairProvider extends BaseContract {
@@ -85,6 +95,18 @@ export interface IStrategyAprPairProvider extends BaseContract {
     "nonpayable"
   >;
 
+  getAprPairView: TypedContractMethod<
+    [],
+    [
+      [bigint, bigint, bigint] & {
+        aprTarget: bigint;
+        aprBase: bigint;
+        timestamp: bigint;
+      }
+    ],
+    "view"
+  >;
+
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
@@ -101,6 +123,19 @@ export interface IStrategyAprPairProvider extends BaseContract {
       }
     ],
     "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "getAprPairView"
+  ): TypedContractMethod<
+    [],
+    [
+      [bigint, bigint, bigint] & {
+        aprTarget: bigint;
+        aprBase: bigint;
+        timestamp: bigint;
+      }
+    ],
+    "view"
   >;
 
   filters: {};

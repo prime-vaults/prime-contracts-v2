@@ -82,7 +82,7 @@ const _abi = [
         type: "tuple",
       },
     ],
-    stateMutability: "nonpayable",
+    stateMutability: "view",
     type: "function",
   },
 ] as const;

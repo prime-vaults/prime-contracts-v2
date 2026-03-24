@@ -149,64 +149,75 @@ Run tests.
 
 ---
 
-## PROMPT 5 — APR Oracle (3 contracts)
+## PROMPT 5 — APR Oracle (Strata-inherited, 2 contracts + 4 fixes)
 
 ```
-Do Step 5-6 using the spec from docs/PV_V3_APR_ORACLE.md.
+Do Step 5 from docs/PV_V3_APR_ORACLE.md.
 
-Create 3 contracts:
+IMPORTANT — 4 design fixes vs naive Strata copy:
+  #1 Provider has TWO entry points: getAprPair() (mutate) + getAprPairView() (view)
+     Because our provider shifts snapshots (state-changing), but AprPairFeed.latestRoundData()
+     is a view function that needs fallback. View calls getAprPairView(), update calls getAprPair().
+  #2 aTokenAddress read from Aave getReserveData(), NOT hardcoded immutables.
+     Uses benchmarkTokens[] array (like Strata).
+  #3 Benchmark APR capped at 40% (BENCHMARK_MAX) in provider.
+  #4 Strategy APR clamped to [-50%, +200%] before int64 cast (prevents silent overflow).
 
-1. contracts/oracles/providers/AaveAprProvider.sol
-   - Reads Aave v3 Arbitrum USDC + USDT currentLiquidityRate
-   - Returns supply-weighted average as benchmark APR
-   - Pure view function, no state, no keeper
-   - Addresses from docs/PV_V3_APR_ORACLE.md section 2
+First create contracts/interfaces/IAprPairFeed.sol:
+  IStrategyAprPairProvider:
+    - getAprPair() → (int64, int64, uint64) — state-changing
+    - getAprPairView() → (int64, int64, uint64) — pure view
+  IAprPairFeed: TRound struct, latestRoundData(), getRoundData()
 
-2. contracts/oracles/providers/SUSDaiAprProvider.sol
-   - snapshot(): keeper records sUSDai.convertToAssets(1e18)
-   - fetchStrategyApr(): APR from 2 snapshots (annualized growth)
-   - fetchLiveApr(): realtime estimate using latest snapshot + live rate
-   - MIN_SNAPSHOT_INTERVAL = 1 hour
-   - Constructor seeds first snapshot
-   - sUSDai address: 0x0B2b2B2076d95dda7817e785989fE353fe955ef9
+Then create 2 contracts:
 
-3. contracts/oracles/AprPairFeed.sol
-   - updateRoundData(): fetch from both providers, cache
-   - getAprPair(): return cached, revert if stale (48h default)
-   - setManualApr(): emergency governance override
-   - clearManualOverride(): resume auto mode
-   - updateRoundData is permissionless (anyone can call)
+1. contracts/oracles/providers/SUSDaiAprPairProvider.sol
+   - getAprPair(): shifts snapshots + computes APRs (called by Feed PULL update)
+   - getAprPairView(): reads existing snapshots, NO shift (called by Feed fallback)
+   - _computeBenchmarkApr(): Aave weighted avg, benchmarkTokens[], aToken from getReserveData
+   - _computeStrategyApr(): annualized growth, supports negative, clamped [-50%, +200%]
+   - Constructor seeds first sUSDai snapshot
+   - No hardcoded aToken addresses
+
+2. contracts/oracles/AprPairFeed.sol
+   - latestRoundData(): fallback calls getAprPairView() (NOT getAprPair())
+   - updateRoundData(): PULL calls getAprPair() (shifts snapshots)
+   - updateRoundData(args): PUSH from observer
+   - setProvider(): compatibility check via getAprPairView() (not getAprPair())
+   - Rest identical to Strata: 20 rounds, bounds, ESourcePref, AccessControl
 
 For testing create:
-  test/helpers/mocks/MockERC4626.sol — simulate sUSDai with configurable rate
-  test/helpers/mocks/MockAavePool.sol — simulate Aave getReserveData
+  test/helpers/mocks/MockERC4626.sol — sUSDai with configurable rate
+  test/helpers/mocks/MockAavePool.sol — returns ReserveData with aTokenAddress
 
 Write tests:
-  test/unit/AaveAprProvider.test.ts
-    - Returns weighted average of USDC + USDT rates
-    - Returns 0 if no supply
-
-  test/unit/SUSDaiAprProvider.test.ts
-    - snapshot: records rate + timestamp
-    - snapshot too soon: reverts (< 1 hour)
-    - fetchStrategyApr: correct annualized APR from 2 snapshots
-    - fetchStrategyApr before 2 snapshots: reverts
-    - fetchStrategyApr when rate decreases: returns 0
-    - fetchLiveApr: works with current block rate
-    - onlyKeeper access control
+  test/unit/SUSDaiAprPairProvider.test.ts
+    - getAprPair: shifts snapshots, returns APRs
+    - getAprPairView: does NOT shift snapshots, returns same APRs
+    - First call (1 snapshot): aprBase = 0
+    - Second call: both APRs correct (int64×12dec)
+    - Rate decrease: aprBase negative
+    - Extreme rate jump: aprBase clamped at 200% (not overflow)
+    - Aave weighted avg: different supplies weighted correctly
+    - Benchmark > 40%: capped at BENCHMARK_MAX
+    - aTokenAddress read from getReserveData (not hardcoded)
 
   test/unit/AprPairFeed.test.ts
-    - updateRoundData: caches both APRs
-    - getAprPair: returns cached values
-    - getAprPair after staleAfter: reverts
-    - setManualApr: overrides providers
-    - clearManualOverride: resumes auto
-    - updateRoundData is permissionless
+    - PUSH: stores round, sourcePref = Feed
+    - PULL: calls getAprPair (mutate), stores round, sourcePref = Strategy
+    - latestRoundData Feed mode: returns cache if fresh
+    - latestRoundData Feed mode stale: calls getAprPairView (NOT getAprPair)
+    - latestRoundData Strategy mode: calls getAprPairView
+    - Bounds: revert if APR outside [-50%, +200%]
+    - Out-of-order: revert
+    - getRoundData: historical access
+    - setProvider: calls getAprPairView for compat check (no side effect)
+    - Roles: UPDATER_FEED_ROLE required
 
-Run compile + tests.
+Compile + run tests.
 ```
 
-**Verify:** compile + all 3 test files pass.
+**Verify:** compile + both test files pass.
 
 ---
 
@@ -740,7 +751,7 @@ Fix the file.
 #2   All interfaces
 #3   FixedPointMath + tests
 #4   RiskParams + tests
-#5   APR Oracle: AaveAprProvider + SUSDaiAprProvider + AprPairFeed + tests
+#5   APR Oracle: SUSDaiAprPairProvider + AprPairFeed (view/mutate split, bounds, clamp)
 #6   Accounting Part 1: state + views + tests
 #7   Accounting Part 2: APR + gain splitting + tests
 #8   WETHPriceOracle + mock + tests
