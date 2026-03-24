@@ -42,6 +42,8 @@ export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC
 export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
 export type { Pausable } from "./@openzeppelin/contracts/utils/Pausable";
 export { Pausable__factory } from "./factories/@openzeppelin/contracts/utils/Pausable__factory";
+export type { ERC20Cooldown } from "./contracts/cooldown/ERC20Cooldown";
+export { ERC20Cooldown__factory } from "./factories/contracts/cooldown/ERC20Cooldown__factory";
 export type { Accounting } from "./contracts/core/Accounting";
 export { Accounting__factory } from "./factories/contracts/core/Accounting__factory";
 export type { RiskParams } from "./contracts/governance/RiskParams";
@@ -94,8 +96,6 @@ export type { BaseStrategy } from "./contracts/strategies/BaseStrategy";
 export { BaseStrategy__factory } from "./factories/contracts/strategies/BaseStrategy__factory";
 export type { IStakedUSDai } from "./contracts/strategies/implementations/SUSDaiStrategy.sol/IStakedUSDai";
 export { IStakedUSDai__factory } from "./factories/contracts/strategies/implementations/SUSDaiStrategy.sol/IStakedUSDai__factory";
-export type { ISUSDai } from "./contracts/strategies/implementations/SUSDaiStrategy.sol/ISUSDai";
-export { ISUSDai__factory } from "./factories/contracts/strategies/implementations/SUSDaiStrategy.sol/ISUSDai__factory";
 export type { SUSDaiStrategy } from "./contracts/strategies/implementations/SUSDaiStrategy.sol/SUSDaiStrategy";
 export { SUSDaiStrategy__factory } from "./factories/contracts/strategies/implementations/SUSDaiStrategy.sol/SUSDaiStrategy__factory";
 export type { MockAavePool } from "./contracts/test/mocks/MockAavePool.sol/MockAavePool";

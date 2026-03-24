@@ -86,6 +86,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Pausable__factory>;
     getContractFactory(
+      name: "ERC20Cooldown",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ERC20Cooldown__factory>;
+    getContractFactory(
       name: "Accounting",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Accounting__factory>;
@@ -189,10 +193,6 @@ declare module "hardhat/types/runtime" {
       name: "IStakedUSDai",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IStakedUSDai__factory>;
-    getContractFactory(
-      name: "ISUSDai",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ISUSDai__factory>;
     getContractFactory(
       name: "SUSDaiStrategy",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -333,6 +333,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.Pausable>;
     getContractAt(
+      name: "ERC20Cooldown",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ERC20Cooldown>;
+    getContractAt(
       name: "Accounting",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -462,11 +467,6 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IStakedUSDai>;
-    getContractAt(
-      name: "ISUSDai",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.ISUSDai>;
     getContractAt(
       name: "SUSDaiStrategy",
       address: string | ethers.Addressable,
@@ -601,6 +601,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Pausable>;
     deployContract(
+      name: "ERC20Cooldown",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ERC20Cooldown>;
+    deployContract(
       name: "Accounting",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Accounting>;
@@ -704,10 +708,6 @@ declare module "hardhat/types/runtime" {
       name: "IStakedUSDai",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IStakedUSDai>;
-    deployContract(
-      name: "ISUSDai",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ISUSDai>;
     deployContract(
       name: "SUSDaiStrategy",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -848,6 +848,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Pausable>;
     deployContract(
+      name: "ERC20Cooldown",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ERC20Cooldown>;
+    deployContract(
       name: "Accounting",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -977,11 +982,6 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IStakedUSDai>;
-    deployContract(
-      name: "ISUSDai",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ISUSDai>;
     deployContract(
       name: "SUSDaiStrategy",
       args: any[],
