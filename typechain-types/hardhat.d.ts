@@ -186,6 +186,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.BaseStrategy__factory>;
     getContractFactory(
+      name: "IStakedUSDai",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IStakedUSDai__factory>;
+    getContractFactory(
       name: "ISUSDai",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ISUSDai__factory>;
@@ -221,6 +225,10 @@ declare module "hardhat/types/runtime" {
       name: "MockERC4626",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockERC4626__factory>;
+    getContractFactory(
+      name: "MockStakedUSDai",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockStakedUSDai__factory>;
     getContractFactory(
       name: "MockSUSDai",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -450,6 +458,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.BaseStrategy>;
     getContractAt(
+      name: "IStakedUSDai",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IStakedUSDai>;
+    getContractAt(
       name: "ISUSDai",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -494,6 +507,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockERC4626>;
+    getContractAt(
+      name: "MockStakedUSDai",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockStakedUSDai>;
     getContractAt(
       name: "MockSUSDai",
       address: string | ethers.Addressable,
@@ -683,6 +701,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.BaseStrategy>;
     deployContract(
+      name: "IStakedUSDai",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IStakedUSDai>;
+    deployContract(
       name: "ISUSDai",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ISUSDai>;
@@ -718,6 +740,10 @@ declare module "hardhat/types/runtime" {
       name: "MockERC4626",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockERC4626>;
+    deployContract(
+      name: "MockStakedUSDai",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockStakedUSDai>;
     deployContract(
       name: "MockSUSDai",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -947,6 +973,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.BaseStrategy>;
     deployContract(
+      name: "IStakedUSDai",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IStakedUSDai>;
+    deployContract(
       name: "ISUSDai",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -991,6 +1022,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockERC4626>;
+    deployContract(
+      name: "MockStakedUSDai",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockStakedUSDai>;
     deployContract(
       name: "MockSUSDai",
       args: any[],

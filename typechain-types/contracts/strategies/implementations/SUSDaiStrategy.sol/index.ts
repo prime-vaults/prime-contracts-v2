@@ -2,4 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { ISUSDai } from "./ISUSDai";
+export type { IStakedUSDai } from "./IStakedUSDai";
 export type { SUSDaiStrategy } from "./SUSDaiStrategy";

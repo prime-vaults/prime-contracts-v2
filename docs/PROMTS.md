@@ -14,6 +14,7 @@ mkdir -p docs
 #   PV_V3_COVERAGE_GATE.md
 #   PV_V3_MVP_PLAN.md
 #   PV_V3_MATH_REFERENCE.md
+#   PV_V3_APR_ORACLE.md
 #   CONVENTIONS.md
 ```
 
@@ -29,8 +30,15 @@ Key context:
 - Strategy: sUSDai (USD.AI) — ERC-4626 deposit + ERC-7540 async redeem
 - sUSDai: 0x0B2b2B2076d95dda7817e785989fE353fe955ef9 (Arbitrum)
 - USDai: 0x0A1a1A107E45b7Ced86833863f482BC5f4ed82EF (Arbitrum)
-- APR oracle: fully on-chain (Aave benchmark + sUSDai rate snapshots)
-- See docs/PV_V3_APR_ORACLE.md for APR oracle architecture
+- APR oracle: PULL only, trustless (Aave benchmark + sUSDai rate snapshots)
+- See docs/PV_V3_APR_ORACLE.md for APR oracle + sUSDai verified ABI
+
+Critical sUSDai integration details:
+- requestRedeem(shares, controller, owner) → returns uint256 redemptionId
+- redemption(redemptionId) → struct with redemptionTimestamp (uint64, EXACT)
+- claimableRedeemRequest(redemptionId, controller) → source of truth for claim readiness
+- serviceRedemptions() called by USD.AI admin (FIFO queue, NOT fixed cooldown)
+- NO cooldownDuration() function exists — read redemptionTimestamp from struct instead
 
 Rules for ALL code you generate:
 1. Follow docs/CONVENTIONS.md strictly — naming, formatting, NatSpec, errors
@@ -372,25 +380,58 @@ Do Steps 17-18 from docs/PV_V3_MVP_PLAN.md.
 Create contracts/strategies/BaseStrategy.sol and
 contracts/strategies/implementations/SUSDaiStrategy.sol.
 
-SUSDaiStrategy specifics (from docs/PV_V3_APR_ORACLE.md section 9):
-- sUSDai: ERC-4626 deposit (synchronous) + ERC-7540 redeem (async ~7 days)
-- deposit(USDai) → sUSDai.deposit(amount, this) → get shares
-- withdraw sUSDai → instant transfer
-- withdraw USDai → sUSDai.requestRedeem() → 7 day cooldown → redeem()
+CRITICAL — sUSDai actual interface (from ABI, verified on Arbiscan):
 
-For testing, create test/helpers/mocks/MockERC4626.sol that simulates
-sUSDai vault — deposit USDai get shares, convertToAssets increases over
-time. Add requestRedeem/redeem mock for ERC-7540 async flow.
+  Deposit (synchronous, ERC-4626):
+    sUSDai.deposit(amount, receiver) → shares
+    sUSDai.convertToAssets(shares) → assets
+    sUSDai.convertToShares(assets) → shares
+
+  Withdraw (async, ERC-7540 FIFO queue):
+    sUSDai.requestRedeem(shares, controller, owner) → uint256 redemptionId
+    sUSDai.redemption(redemptionId) → (Redemption struct, uint256)
+      Redemption struct:
+        prev, next:          uint256    (linked list)
+        pendingShares:       uint256
+        redeemableShares:    uint256
+        withdrawableAmount:  uint256
+        controller:          address
+        redemptionTimestamp: uint64     ← EXACT timestamp from contract
+    sUSDai.claimableRedeemRequest(redemptionId, controller) → uint256
+    sUSDai.pendingRedeemRequest(redemptionId, controller) → uint256
+    sUSDai.redeem(shares, receiver, controller) → uint256
+    sUSDai.redemptionIds(controller) → uint256[]
+    sUSDai.serviceRedemptions(shares) → uint256  (admin only)
+
+  Key insight: NO s_unstakeDuration needed. sUSDai provides exact
+  redemptionTimestamp per redemption. Read it, use it.
+
+SUSDaiStrategy._withdraw() flow:
+  1. shares = sUSDai.convertToShares(amount)
+  2. Transfer sUSDai shares to CooldownRequestImpl
+  3. CooldownRequestImpl calls sUSDai.requestRedeem() → gets redemptionId
+  4. CooldownRequestImpl reads sUSDai.redemption(redemptionId).redemptionTimestamp
+  5. Return WithdrawResult with unlockTime from sUSDai (exact, not estimate)
+
+For testing, create test/helpers/mocks/MockStakedUSDai.sol that simulates:
+  - ERC-4626 deposit/convertToAssets (exchange rate increases over time)
+  - ERC-7540: requestRedeem → returns redemptionId
+  - redemption(id) → returns struct with configurable redemptionTimestamp
+  - claimableRedeemRequest(id, controller) → 0 before service, shares after
+  - serviceRedemptions() → marks redemptions as claimable
+  - redeem() → transfers USDai when claimable
+  - redemptionIds(controller) → returns list
 
 Write test/unit/SUSDaiStrategy.test.ts:
-- deposit USDai → mints sUSDai shares internally
-- depositToken sUSDai → direct transfer
-- withdraw sUSDai → instant (WithdrawType.INSTANT)
-- withdraw USDai → returns UNSTAKE type (ERC-7540 async cooldown)
-- totalAssets → reflects sUSDai exchange rate
-- emergencyWithdraw → returns all to CDO
-- supportedTokens → [USDai, sUSDai]
-- onlyCDO + pause checks
+  - deposit USDai → mints sUSDai shares internally
+  - depositToken sUSDai → direct transfer
+  - withdraw sUSDai → instant (WithdrawType.INSTANT)
+  - withdraw USDai → UNSTAKE type, unlockTime from sUSDai.redemptionTimestamp
+  - withdraw USDai → redemptionId stored correctly
+  - totalAssets → reflects sUSDai exchange rate (exclude pending redeem shares)
+  - emergencyWithdraw → returns all to CDO
+  - supportedTokens → [USDai, sUSDai]
+  - onlyCDO + pause checks
 
 Run tests.
 ```
@@ -428,20 +469,70 @@ Do Steps 13 + 16 from docs/PV_V3_MVP_PLAN.md.
 Create contracts/cooldown/UnstakeCooldown.sol and
 contracts/strategies/implementations/cooldown/SUSDaiCooldownRequestImpl.sol.
 
-SUSDaiCooldownRequestImpl wraps sUSDai's ERC-7540 async redeem:
-  initiateCooldown() → sUSDai.requestRedeem(shares, receiver, this)
-  finalizeCooldown() → sUSDai.redeem(shares, receiver, this)
-  isCooldownComplete() → check if redeem is claimable
+CRITICAL — sUSDai redemption is FIFO queue, NOT fixed cooldown:
+  - requestRedeem() → returns redemptionId, enters FIFO queue
+  - USD.AI admin calls serviceRedemptions() to process queue
+  - claimableRedeemRequest(redemptionId, controller) > 0 when ready
+  - redemption(redemptionId).redemptionTimestamp = exact unlock time
+  - redeem(shares, receiver, controller) to claim
 
-For testing, create test/helpers/mocks/MockSUSDai.sol that
-simulates ERC-7540 requestRedeem/redeem with configurable cooldown.
+SUSDaiCooldownRequestImpl:
+
+  initiateCooldown(shares):
+    1. Transfer sUSDai shares from caller
+    2. sUSDai.requestRedeem(shares, this, this) → redemptionId
+    3. Read sUSDai.redemption(redemptionId).redemptionTimestamp → exact time
+    4. Store mapping: cooldownId → redemptionId
+    5. Return cooldownDuration = redemptionTimestamp - block.timestamp
+
+  finalizeCooldown(cooldownId, receiver):
+    1. Look up redemptionId from mapping
+    2. Check sUSDai.claimableRedeemRequest(redemptionId, this) > 0
+    3. sUSDai.redeem(claimable, receiver, this) → USDai to receiver
+    4. Return amountOut
+
+  isCooldownComplete(cooldownId):
+    1. Look up redemptionId
+    2. Return sUSDai.claimableRedeemRequest(redemptionId, this) > 0
+    → Source of truth from sUSDai contract, NOT timestamp estimate
+
+  Note: unlockTime in WithdrawResult uses redemptionTimestamp from sUSDai
+  contract (exact). No s_unstakeDuration, no governance-set estimate.
+  But actual claimability depends on serviceRedemptions() being called
+  by USD.AI admin — redemptionTimestamp is necessary but not sufficient.
+  isCooldownComplete() checks claimable state (sufficient condition).
+
+Interface needed — IStakedUSDai (partial, for PrimeVaults):
+  function requestRedeem(uint256, address, address) external returns (uint256);
+  function redemption(uint256) external view returns (Redemption memory, uint256);
+  function claimableRedeemRequest(uint256, address) external view returns (uint256);
+  function pendingRedeemRequest(uint256, address) external view returns (uint256);
+  function redeem(uint256, address, address) external returns (uint256);
+  function redemptionIds(address) external view returns (uint256[] memory);
+
+  struct Redemption {
+      uint256 prev; uint256 next;
+      uint256 pendingShares; uint256 redeemableShares;
+      uint256 withdrawableAmount;
+      address controller; uint64 redemptionTimestamp;
+  }
+
+For testing, create test/helpers/mocks/MockStakedUSDai.sol:
+  - requestRedeem: assign redemptionId, store struct with redemptionTimestamp
+  - redemption(id): return struct
+  - claimableRedeemRequest: return 0 before service, shares after service
+  - serviceRedemptions: mark redemptions as claimable (simulate admin)
+  - redeem: transfer USDai when claimable
 
 Write test/unit/UnstakeCooldown.test.ts:
-- request: calls impl.initiateCooldown, stores request
-- claim: calls impl.finalizeCooldown, transfers USDai
-- isClaimable: delegates to impl.isCooldownComplete
-- setImplementation: registers token → impl mapping
-- onlyAuthorized
+  - request: calls impl.initiateCooldown, stores cooldownId → redemptionId mapping
+  - request: unlockTime = sUSDai.redemptionTimestamp (not hardcoded)
+  - claim before serviceRedemptions: revert (not claimable yet)
+  - claim after serviceRedemptions: transfers USDai
+  - isCooldownComplete before service: false
+  - isCooldownComplete after service: true
+  - multiple requests: separate redemptionIds tracked correctly
+  - redemptionIds(controller): returns all active IDs
 
 Run tests.
 ```
@@ -640,18 +731,25 @@ Fork Arbitrum mainnet at latest block. Use real:
 Deploy full stack on fork. Use hardhat_impersonateAccount to get
 USDai + WETH for test users (find whale addresses on Arbiscan).
 
+Note: sUSDai uses FIFO redemption queue processed by STRATEGY_ADMIN_ROLE.
+For integration tests, impersonate sUSDai admin to call serviceRedemptions().
+
 Test sequence:
-1. Deploy all contracts (including APR oracle with manual override for first 24h)
+1. Deploy all contracts
 2. User A: $10K Senior deposit
 3. User B: $5K Mezz deposit
 4. User C: $8K USDai + 0.67 WETH Junior deposit
-5. Keeper: snapshot sUSDai rate + updateRoundData
+5. Keeper: updateRoundData (first snapshot pair)
 6. Advance time 7 days (hardhat_mine)
-7. Keeper: second snapshot + updateRoundData
+7. Keeper: updateRoundData (second snapshot → APR accurate)
 8. Verify share prices increased for all tranches
-9. User A: withdraw Senior (instant at high coverage)
-10. User C: withdraw Junior (gets USDai + WETH)
-11. Verify all TVLs balance correctly
+9. User A: requestWithdraw Senior → check unlockTime from sUSDai.redemptionTimestamp
+10. Impersonate sUSDai admin → serviceRedemptions() → process queue
+11. User A: claimWithdraw → receives USDai
+12. User C: requestWithdraw Junior → gets USDai cooldown + WETH instant
+13. Impersonate sUSDai admin → serviceRedemptions()
+14. User C: claimWithdraw → receives USDai
+15. Verify all TVLs balance correctly
 
 Run tests.
 ```
@@ -694,16 +792,15 @@ deploy/01_deploy_shared.ts:
   ERC20Cooldown, UnstakeCooldown, SharesCooldown
 
 deploy/02_deploy_usdai_market.ts:
-  AaveAprProvider, SUSDaiAprProvider, AprPairFeed,
+  SUSDaiAprPairProvider, AprPairFeed,
   Accounting, SUSDaiStrategy, SUSDaiCooldownRequestImpl,
   AaveWETHAdapter, RedemptionPolicy, PrimeCDO, TrancheVault × 3
 
 deploy/03_configure.ts:
   Register vaults in CDO, authorize cooldown contracts,
-  set cooldown durations, configure redemption ranges,
+  configure redemption ranges,
   set coverage gate params, set WETH ratio params,
-  set manual APR override (first 24h),
-  set keeper in SUSDaiAprProvider
+  grant KEEPER_ROLE on AprPairFeed to keeper address
 
 scripts/verify-deployment.ts:
   Read all params, verify correct values, test $1 deposit/withdraw

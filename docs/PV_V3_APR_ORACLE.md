@@ -376,17 +376,85 @@ getAprPairView() chỉ là backup nếu keeper miss > 48h.
 
 ---
 
-## 9. Arbitrum Addresses
+## 9. sUSDai Verified Interface (from Arbiscan ABI)
+
+**Contract:** `0x0B2b2B2076d95dda7817e785989fE353fe955ef9` (TransparentUpgradeableProxy)  
+**Implementation:** `0xc0540184de0e42eab2b0a4fc35f4817041001e85`  
+**Builder:** MetaStreet Labs (Permian Labs)
+
+### ERC-4626 Deposit (synchronous)
+
+```
+deposit(amount, receiver) → shares
+deposit(amount, receiver, minShares) → shares          // slippage protection
+mint(shares, receiver) → assets
+mint(shares, receiver, maxAmount) → assets             // slippage protection
+convertToAssets(shares) → assets
+convertToShares(assets) → shares
+depositSharePrice() → uint256
+totalAssets() → uint256
+```
+
+### ERC-7540 Redeem (async, FIFO queue)
+
+```
+requestRedeem(shares, controller, owner) → uint256 redemptionId
+
+redemption(redemptionId) → (Redemption struct, uint256)
+  struct Redemption {
+      uint256 prev;                 // linked list
+      uint256 next;                 // linked list
+      uint256 pendingShares;        // shares waiting in queue
+      uint256 redeemableShares;     // shares ready to claim
+      uint256 withdrawableAmount;   // USDai amount claimable
+      address controller;           // who controls this redemption
+      uint64 redemptionTimestamp;   // EXACT unlock timestamp
+  }
+
+claimableRedeemRequest(redemptionId, controller) → uint256 shares
+pendingRedeemRequest(redemptionId, controller) → uint256 shares
+redeem(shares, receiver, controller) → uint256 assets
+redemptionIds(controller) → uint256[] ids
+redemptionTimestamp() → uint64                         // global redemption timelock
+redemptionSharePrice() → uint256                       // share price for redemptions
+redemptionQueueInfo() → (index, head, tail, pending, balance)
+
+serviceRedemptions(shares) → uint256                   // STRATEGY_ADMIN_ROLE only
+```
+
+### Key findings for PrimeVaults integration
+
+```
+1. requestRedeem() returns redemptionId (uint256) — use this to track
+2. redemption(id).redemptionTimestamp = EXACT unlock time from contract
+   → No need for s_unstakeDuration governance-set estimate
+   → No need to hardcode 7 days
+3. claimableRedeemRequest(id, controller) > 0 = ready to claim
+   → Source of truth for isCooldownComplete()
+   → redemptionTimestamp is necessary but NOT sufficient
+     (admin must call serviceRedemptions() to process queue)
+4. FIFO queue — redemptions processed head-to-tail by admin
+   → PrimeVaults cannot control when admin services queue
+   → But can read exact state via claimableRedeemRequest()
+5. Multiple redemptionIds per controller — track each separately
+   → redemptionIds(controller) returns full list
+```
+
+---
+
+## 10. Arbitrum Addresses
 
 ```
 Aave v3 Pool:   0x794a61358D6845594F94dc1DB02A252b5b4814aD
 USDC:           0xaf88d065e77c8cC2239327C5EDb3A432268e5831
 USDT:           0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9
 sUSDai:         0x0B2b2B2076d95dda7817e785989fE353fe955ef9
+USDai:          0x0A1a1A107E45b7Ced86833863f482BC5f4ed82EF
 ```
 
 ---
 
 _PrimeVaults V3 — APR Oracle v3.6.0_  
 _PULL only • Trustless • No PUSH attack surface_  
+_sUSDai interface verified from Arbiscan ABI_  
 _March 2026_

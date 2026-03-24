@@ -21,15 +21,49 @@ import type {
   TypedContractMethod,
 } from "../../../../common";
 
-export interface ISUSDaiInterface extends Interface {
+export declare namespace IStakedUSDai {
+  export type RedemptionStruct = {
+    prev: BigNumberish;
+    next: BigNumberish;
+    pendingShares: BigNumberish;
+    redeemableShares: BigNumberish;
+    withdrawableAmount: BigNumberish;
+    controller: AddressLike;
+    redemptionTimestamp: BigNumberish;
+  };
+
+  export type RedemptionStructOutput = [
+    prev: bigint,
+    next: bigint,
+    pendingShares: bigint,
+    redeemableShares: bigint,
+    withdrawableAmount: bigint,
+    controller: string,
+    redemptionTimestamp: bigint
+  ] & {
+    prev: bigint;
+    next: bigint;
+    pendingShares: bigint;
+    redeemableShares: bigint;
+    withdrawableAmount: bigint;
+    controller: string;
+    redemptionTimestamp: bigint;
+  };
+}
+
+export interface IStakedUSDaiInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "approve"
       | "balanceOf"
+      | "claimableRedeemRequest"
       | "convertToAssets"
       | "convertToShares"
-      | "cooldownDuration"
       | "deposit"
+      | "pendingRedeemRequest"
+      | "redeem"
+      | "redemption"
+      | "redemptionIds"
       | "requestRedeem"
       | "transfer"
   ): FunctionFragment;
@@ -43,6 +77,10 @@ export interface ISUSDaiInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "claimableRedeemRequest",
+    values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "convertToAssets",
     values: [BigNumberish]
   ): string;
@@ -51,12 +89,24 @@ export interface ISUSDaiInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "cooldownDuration",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "deposit",
     values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "pendingRedeemRequest",
+    values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "redeem",
+    values: [BigNumberish, AddressLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "redemption",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "redemptionIds",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "requestRedeem",
@@ -70,6 +120,10 @@ export interface ISUSDaiInterface extends Interface {
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "claimableRedeemRequest",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "convertToAssets",
     data: BytesLike
   ): Result;
@@ -77,11 +131,17 @@ export interface ISUSDaiInterface extends Interface {
     functionFragment: "convertToShares",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "cooldownDuration",
+    functionFragment: "pendingRedeemRequest",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "redeem", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "redemption", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "redemptionIds",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "requestRedeem",
     data: BytesLike
@@ -89,11 +149,11 @@ export interface ISUSDaiInterface extends Interface {
   decodeFunctionResult(functionFragment: "transfer", data: BytesLike): Result;
 }
 
-export interface ISUSDai extends BaseContract {
-  connect(runner?: ContractRunner | null): ISUSDai;
+export interface IStakedUSDai extends BaseContract {
+  connect(runner?: ContractRunner | null): IStakedUSDai;
   waitForDeployment(): Promise<this>;
 
-  interface: ISUSDaiInterface;
+  interface: IStakedUSDaiInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -140,6 +200,12 @@ export interface ISUSDai extends BaseContract {
 
   balanceOf: TypedContractMethod<[account: AddressLike], [bigint], "view">;
 
+  claimableRedeemRequest: TypedContractMethod<
+    [redemptionId: BigNumberish, controller: AddressLike],
+    [bigint],
+    "view"
+  >;
+
   convertToAssets: TypedContractMethod<
     [shares: BigNumberish],
     [bigint],
@@ -152,16 +218,38 @@ export interface ISUSDai extends BaseContract {
     "view"
   >;
 
-  cooldownDuration: TypedContractMethod<[], [bigint], "view">;
-
   deposit: TypedContractMethod<
     [assets: BigNumberish, receiver: AddressLike],
     [bigint],
     "nonpayable"
   >;
 
+  pendingRedeemRequest: TypedContractMethod<
+    [redemptionId: BigNumberish, controller: AddressLike],
+    [bigint],
+    "view"
+  >;
+
+  redeem: TypedContractMethod<
+    [shares: BigNumberish, receiver: AddressLike, controller: AddressLike],
+    [bigint],
+    "nonpayable"
+  >;
+
+  redemption: TypedContractMethod<
+    [redemptionId: BigNumberish],
+    [[IStakedUSDai.RedemptionStructOutput, bigint]],
+    "view"
+  >;
+
+  redemptionIds: TypedContractMethod<
+    [controller: AddressLike],
+    [bigint[]],
+    "view"
+  >;
+
   requestRedeem: TypedContractMethod<
-    [shares: BigNumberish, receiver: AddressLike, owner: AddressLike],
+    [shares: BigNumberish, controller: AddressLike, owner: AddressLike],
     [bigint],
     "nonpayable"
   >;
@@ -187,14 +275,18 @@ export interface ISUSDai extends BaseContract {
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[account: AddressLike], [bigint], "view">;
   getFunction(
+    nameOrSignature: "claimableRedeemRequest"
+  ): TypedContractMethod<
+    [redemptionId: BigNumberish, controller: AddressLike],
+    [bigint],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "convertToAssets"
   ): TypedContractMethod<[shares: BigNumberish], [bigint], "view">;
   getFunction(
     nameOrSignature: "convertToShares"
   ): TypedContractMethod<[assets: BigNumberish], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "cooldownDuration"
-  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "deposit"
   ): TypedContractMethod<
@@ -203,9 +295,33 @@ export interface ISUSDai extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "pendingRedeemRequest"
+  ): TypedContractMethod<
+    [redemptionId: BigNumberish, controller: AddressLike],
+    [bigint],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "redeem"
+  ): TypedContractMethod<
+    [shares: BigNumberish, receiver: AddressLike, controller: AddressLike],
+    [bigint],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "redemption"
+  ): TypedContractMethod<
+    [redemptionId: BigNumberish],
+    [[IStakedUSDai.RedemptionStructOutput, bigint]],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "redemptionIds"
+  ): TypedContractMethod<[controller: AddressLike], [bigint[]], "view">;
+  getFunction(
     nameOrSignature: "requestRedeem"
   ): TypedContractMethod<
-    [shares: BigNumberish, receiver: AddressLike, owner: AddressLike],
+    [shares: BigNumberish, controller: AddressLike, owner: AddressLike],
     [bigint],
     "nonpayable"
   >;

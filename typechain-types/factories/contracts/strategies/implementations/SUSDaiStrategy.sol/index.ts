@@ -2,4 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export { ISUSDai__factory } from "./ISUSDai__factory";
+export { IStakedUSDai__factory } from "./IStakedUSDai__factory";
 export { SUSDaiStrategy__factory } from "./SUSDaiStrategy__factory";

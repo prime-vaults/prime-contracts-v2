@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 // ══════════════════════════════════════════════════════════════════════
 //  PRIMEVAULTS V3 — SUSDaiStrategy
-//  Strategy adapter for sUSDai (ERC-4626 deposit + ERC-7540 async redeem)
+//  Strategy adapter for sUSDai (ERC-4626 deposit + ERC-7540 FIFO redeem)
 //  See: docs/PV_V3_APR_ORACLE.md section 9
 // ══════════════════════════════════════════════════════════════════════
 
@@ -13,16 +13,35 @@ import {WithdrawResult, WithdrawType} from "../../interfaces/IStrategy.sol";
 import {BaseStrategy} from "../BaseStrategy.sol";
 
 /**
- * @dev Minimal sUSDai interface — ERC-4626 deposit + ERC-7540 async redeem.
+ * @dev Minimal sUSDai interface matching actual Arbiscan ABI.
+ *      ERC-4626 deposit (sync) + ERC-7540 FIFO queue redeem (async).
  */
-interface ISUSDai {
+interface IStakedUSDai {
+    // ERC-4626
     function deposit(uint256 assets, address receiver) external returns (uint256 shares);
     function convertToAssets(uint256 shares) external view returns (uint256);
     function convertToShares(uint256 assets) external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
-    function requestRedeem(uint256 shares, address receiver, address owner) external returns (uint256 requestId);
     function transfer(address to, uint256 amount) external returns (bool);
     function approve(address spender, uint256 amount) external returns (bool);
+
+    // ERC-7540 FIFO queue
+    struct Redemption {
+        uint256 prev;
+        uint256 next;
+        uint256 pendingShares;
+        uint256 redeemableShares;
+        uint256 withdrawableAmount;
+        address controller;
+        uint64 redemptionTimestamp;
+    }
+
+    function requestRedeem(uint256 shares, address controller, address owner) external returns (uint256 redemptionId);
+    function redemption(uint256 redemptionId) external view returns (Redemption memory, uint256);
+    function claimableRedeemRequest(uint256 redemptionId, address controller) external view returns (uint256);
+    function pendingRedeemRequest(uint256 redemptionId, address controller) external view returns (uint256);
+    function redeem(uint256 shares, address receiver, address controller) external returns (uint256);
+    function redemptionIds(address controller) external view returns (uint256[] memory);
 }
 
 /**
@@ -31,8 +50,8 @@ interface ISUSDai {
  * @dev Deposit: USDai → sUSDai.deposit() (synchronous, ERC-4626).
  *      Deposit sUSDai directly: just holds it (already yield-bearing).
  *      Withdraw sUSDai: instant transfer (WithdrawType.INSTANT).
- *      Withdraw USDai: sUSDai.requestRedeem() → ~7 day cooldown (WithdrawType.UNSTAKE).
- *      totalAssets: sUSDai balance × convertToAssets rate.
+ *      Withdraw USDai: sUSDai.requestRedeem() → FIFO queue (WithdrawType.UNSTAKE).
+ *        unlockTime read from sUSDai.redemption(id).redemptionTimestamp (exact, not estimate).
  *      sUSDai: 0x0B2b2B2076d95dda7817e785989fE353fe955ef9 (Arbitrum)
  *      USDai:  0x0A1a1A107E45b7Ced86833863f482BC5f4ed82EF (Arbitrum)
  */
@@ -43,21 +62,14 @@ contract SUSDaiStrategy is BaseStrategy {
     //  IMMUTABLES
     // ═══════════════════════════════════════════════════════════════════
 
-    ISUSDai public immutable i_sUSDai;
+    IStakedUSDai public immutable i_sUSDai;
 
     // ═══════════════════════════════════════════════════════════════════
     //  CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════
 
-    /**
-     * @param primeCDO_ Paired PrimeCDO address
-     * @param usdai_ USDai base asset address
-     * @param sUSDai_ sUSDai vault address
-     * @param owner_ Contract owner (governance)
-     */
     constructor(address primeCDO_, address usdai_, address sUSDai_, address owner_) BaseStrategy(primeCDO_, usdai_, owner_) {
-        i_sUSDai = ISUSDai(sUSDai_);
-        // Approve sUSDai vault to spend USDai for deposits
+        i_sUSDai = IStakedUSDai(sUSDai_);
         IERC20(usdai_).approve(sUSDai_, type(uint256).max);
     }
 
@@ -88,12 +100,10 @@ contract SUSDaiStrategy is BaseStrategy {
         revert PrimeVaults__UnsupportedToken(outputToken);
     }
 
-    /** @notice Cooldown handlers — none managed directly (CDO handles cooldown routing). */
     function getCooldownHandlers() external pure override returns (address[] memory) {
         return new address[](0);
     }
 
-    /** @notice Strategy name. */
     function name() external pure override returns (string memory) {
         return "PrimeVaults sUSDai Strategy";
     }
@@ -102,23 +112,15 @@ contract SUSDaiStrategy is BaseStrategy {
     //  INTERNAL — deposit
     // ═══════════════════════════════════════════════════════════════════
 
-    /**
-     * @dev Deposit USDai → sUSDai via ERC-4626 deposit (synchronous).
-     */
     function _deposit(uint256 amount) internal override returns (uint256 shares) {
         shares = i_sUSDai.deposit(amount, address(this));
     }
 
-    /**
-     * @dev Deposit a supported token.
-     *      USDai → sUSDai.deposit(). sUSDai → just hold it (already yield-bearing).
-     */
     function _depositToken(address token, uint256 amount) internal override returns (uint256 shares) {
         if (token == i_baseAsset) {
             shares = i_sUSDai.deposit(amount, address(this));
         } else if (token == address(i_sUSDai)) {
-            // sUSDai deposited directly — already here from safeTransferFrom in BaseStrategy
-            shares = amount; // 1:1 share accounting
+            shares = amount; // already transferred by BaseStrategy
         } else {
             revert PrimeVaults__UnsupportedToken(token);
         }
@@ -129,33 +131,31 @@ contract SUSDaiStrategy is BaseStrategy {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @dev Withdraw logic based on output token:
-     *      sUSDai → instant transfer (no cooldown).
-     *      USDai → ERC-7540 requestRedeem (async, ~7 days).
+     * @dev Withdraw logic:
+     *      sUSDai output → instant transfer.
+     *      USDai output → sUSDai.requestRedeem() → read exact redemptionTimestamp from contract.
      */
     function _withdraw(uint256 amount, address outputToken, address beneficiary) internal override returns (WithdrawResult memory result) {
         if (outputToken == address(i_sUSDai)) {
             // Instant: transfer sUSDai directly
             uint256 shares = i_sUSDai.convertToShares(amount);
             i_sUSDai.transfer(beneficiary, shares);
-            result = WithdrawResult({
-                wType: WithdrawType.INSTANT,
-                amountOut: shares,
-                cooldownId: 0,
-                cooldownHandler: address(0),
-                unlockTime: 0
-            });
+            result = WithdrawResult({wType: WithdrawType.INSTANT, amountOut: shares, cooldownId: 0, cooldownHandler: address(0), unlockTime: 0});
             emit Withdrawn(outputToken, amount, shares);
         } else if (outputToken == i_baseAsset) {
-            // Unstake: ERC-7540 async redeem
+            // Unstake: ERC-7540 FIFO queue
             uint256 shares = i_sUSDai.convertToShares(amount);
-            uint256 requestId = i_sUSDai.requestRedeem(shares, beneficiary, address(this));
+            uint256 redemptionId = i_sUSDai.requestRedeem(shares, address(this), address(this));
+
+            // Read exact redemptionTimestamp from sUSDai contract (not estimated)
+            (IStakedUSDai.Redemption memory r,) = i_sUSDai.redemption(redemptionId);
+
             result = WithdrawResult({
                 wType: WithdrawType.UNSTAKE,
                 amountOut: 0,
-                cooldownId: requestId,
+                cooldownId: redemptionId,
                 cooldownHandler: address(i_sUSDai),
-                unlockTime: block.timestamp + 7 days
+                unlockTime: uint256(r.redemptionTimestamp)
             });
             emit Withdrawn(outputToken, amount, shares);
         } else {
@@ -167,9 +167,6 @@ contract SUSDaiStrategy is BaseStrategy {
     //  INTERNAL — emergency
     // ═══════════════════════════════════════════════════════════════════
 
-    /**
-     * @dev Emergency: transfer all sUSDai back to CDO (no redeem, instant).
-     */
     function _emergencyWithdraw() internal override returns (uint256 amountOut) {
         uint256 shares = i_sUSDai.balanceOf(address(this));
         amountOut = i_sUSDai.convertToAssets(shares);
