@@ -22,11 +22,6 @@ const _abi = [
       {
         components: [
           {
-            internalType: "uint64",
-            name: "roundId",
-            type: "uint64",
-          },
-          {
             internalType: "int64",
             name: "aprTarget",
             type: "int64",
@@ -38,12 +33,17 @@ const _abi = [
           },
           {
             internalType: "uint64",
-            name: "timestamp",
+            name: "updatedAt",
+            type: "uint64",
+          },
+          {
+            internalType: "uint64",
+            name: "answeredInRound",
             type: "uint64",
           },
         ],
         internalType: "struct IAprPairFeed.TRound",
-        name: "round",
+        name: "",
         type: "tuple",
       },
     ],
@@ -57,11 +57,6 @@ const _abi = [
       {
         components: [
           {
-            internalType: "uint64",
-            name: "roundId",
-            type: "uint64",
-          },
-          {
             internalType: "int64",
             name: "aprTarget",
             type: "int64",
@@ -73,16 +68,28 @@ const _abi = [
           },
           {
             internalType: "uint64",
-            name: "timestamp",
+            name: "updatedAt",
+            type: "uint64",
+          },
+          {
+            internalType: "uint64",
+            name: "answeredInRound",
             type: "uint64",
           },
         ],
         internalType: "struct IAprPairFeed.TRound",
-        name: "round",
+        name: "",
         type: "tuple",
       },
     ],
     stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "updateRoundData",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ] as const;

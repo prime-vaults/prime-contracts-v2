@@ -25,33 +25,32 @@ import type {
 
 export declare namespace IAprPairFeed {
   export type TRoundStruct = {
-    roundId: BigNumberish;
     aprTarget: BigNumberish;
     aprBase: BigNumberish;
-    timestamp: BigNumberish;
+    updatedAt: BigNumberish;
+    answeredInRound: BigNumberish;
   };
 
   export type TRoundStructOutput = [
-    roundId: bigint,
     aprTarget: bigint,
     aprBase: bigint,
-    timestamp: bigint
+    updatedAt: bigint,
+    answeredInRound: bigint
   ] & {
-    roundId: bigint;
     aprTarget: bigint;
     aprBase: bigint;
-    timestamp: bigint;
+    updatedAt: bigint;
+    answeredInRound: bigint;
   };
 }
 
 export interface AprPairFeedInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "APR_LOWER_BOUND"
-      | "APR_UPPER_BOUND"
+      | "DECIMALS"
       | "DEFAULT_ADMIN_ROLE"
-      | "MAX_ROUNDS"
-      | "UPDATER_FEED_ROLE"
+      | "KEEPER_ROLE"
+      | "ROUNDS_CAP"
       | "getRoleAdmin"
       | "getRoundData"
       | "grantRole"
@@ -60,47 +59,39 @@ export interface AprPairFeedInterface extends Interface {
       | "renounceRole"
       | "revokeRole"
       | "s_currentRoundId"
+      | "s_description"
+      | "s_latestRound"
       | "s_oldestRoundId"
       | "s_provider"
+      | "s_roundStaleAfter"
       | "s_rounds"
-      | "s_sourcePref"
-      | "s_staleAfter"
       | "setProvider"
-      | "setSourcePref"
-      | "setStaleAfter"
+      | "setRoundStaleAfter"
       | "supportsInterface"
       | "updateRoundData"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
-      | "ProviderUpdated"
+      | "ProviderSet"
       | "RoleAdminChanged"
       | "RoleGranted"
       | "RoleRevoked"
       | "RoundUpdated"
-      | "SourcePrefUpdated"
-      | "StaleAfterUpdated"
+      | "StalePeriodSet"
   ): EventFragment;
 
-  encodeFunctionData(
-    functionFragment: "APR_LOWER_BOUND",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "APR_UPPER_BOUND",
-    values?: undefined
-  ): string;
+  encodeFunctionData(functionFragment: "DECIMALS", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "DEFAULT_ADMIN_ROLE",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "MAX_ROUNDS",
+    functionFragment: "KEEPER_ROLE",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "UPDATER_FEED_ROLE",
+    functionFragment: "ROUNDS_CAP",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -136,6 +127,14 @@ export interface AprPairFeedInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "s_description",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "s_latestRound",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "s_oldestRoundId",
     values?: undefined
   ): string;
@@ -144,27 +143,19 @@ export interface AprPairFeedInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "s_roundStaleAfter",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "s_rounds",
     values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "s_sourcePref",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "s_staleAfter",
-    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "setProvider",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "setSourcePref",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setStaleAfter",
+    functionFragment: "setRoundStaleAfter",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -176,23 +167,16 @@ export interface AprPairFeedInterface extends Interface {
     values?: undefined
   ): string;
 
-  decodeFunctionResult(
-    functionFragment: "APR_LOWER_BOUND",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "APR_UPPER_BOUND",
-    data: BytesLike
-  ): Result;
+  decodeFunctionResult(functionFragment: "DECIMALS", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "DEFAULT_ADMIN_ROLE",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "MAX_ROUNDS", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "UPDATER_FEED_ROLE",
+    functionFragment: "KEEPER_ROLE",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "ROUNDS_CAP", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getRoleAdmin",
     data: BytesLike
@@ -217,29 +201,29 @@ export interface AprPairFeedInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "s_description",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "s_latestRound",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "s_oldestRoundId",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "s_provider", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "s_roundStaleAfter",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "s_rounds", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "s_sourcePref",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "s_staleAfter",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "setProvider",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "setSourcePref",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "setStaleAfter",
+    functionFragment: "setRoundStaleAfter",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -252,11 +236,11 @@ export interface AprPairFeedInterface extends Interface {
   ): Result;
 }
 
-export namespace ProviderUpdatedEvent {
-  export type InputTuple = [provider: AddressLike];
-  export type OutputTuple = [provider: string];
+export namespace ProviderSetEvent {
+  export type InputTuple = [newProvider: AddressLike];
+  export type OutputTuple = [newProvider: string];
   export interface OutputObject {
-    provider: string;
+    newProvider: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -327,19 +311,19 @@ export namespace RoundUpdatedEvent {
     roundId: BigNumberish,
     aprTarget: BigNumberish,
     aprBase: BigNumberish,
-    timestamp: BigNumberish
+    updatedAt: BigNumberish
   ];
   export type OutputTuple = [
     roundId: bigint,
     aprTarget: bigint,
     aprBase: bigint,
-    timestamp: bigint
+    updatedAt: bigint
   ];
   export interface OutputObject {
     roundId: bigint;
     aprTarget: bigint;
     aprBase: bigint;
-    timestamp: bigint;
+    updatedAt: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -347,23 +331,11 @@ export namespace RoundUpdatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace SourcePrefUpdatedEvent {
-  export type InputTuple = [pref: BigNumberish];
-  export type OutputTuple = [pref: bigint];
+export namespace StalePeriodSetEvent {
+  export type InputTuple = [stalePeriod: BigNumberish];
+  export type OutputTuple = [stalePeriod: bigint];
   export interface OutputObject {
-    pref: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace StaleAfterUpdatedEvent {
-  export type InputTuple = [staleAfter: BigNumberish];
-  export type OutputTuple = [staleAfter: bigint];
-  export interface OutputObject {
-    staleAfter: bigint;
+    stalePeriod: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -414,15 +386,13 @@ export interface AprPairFeed extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  APR_LOWER_BOUND: TypedContractMethod<[], [bigint], "view">;
-
-  APR_UPPER_BOUND: TypedContractMethod<[], [bigint], "view">;
+  DECIMALS: TypedContractMethod<[], [bigint], "view">;
 
   DEFAULT_ADMIN_ROLE: TypedContractMethod<[], [string], "view">;
 
-  MAX_ROUNDS: TypedContractMethod<[], [bigint], "view">;
+  KEEPER_ROLE: TypedContractMethod<[], [string], "view">;
 
-  UPDATER_FEED_ROLE: TypedContractMethod<[], [string], "view">;
+  ROUNDS_CAP: TypedContractMethod<[], [bigint], "view">;
 
   getRoleAdmin: TypedContractMethod<[role: BytesLike], [string], "view">;
 
@@ -464,26 +434,39 @@ export interface AprPairFeed extends BaseContract {
 
   s_currentRoundId: TypedContractMethod<[], [bigint], "view">;
 
-  s_oldestRoundId: TypedContractMethod<[], [bigint], "view">;
+  s_description: TypedContractMethod<[], [string], "view">;
 
-  s_provider: TypedContractMethod<[], [string], "view">;
-
-  s_rounds: TypedContractMethod<
-    [arg0: BigNumberish],
+  s_latestRound: TypedContractMethod<
+    [],
     [
       [bigint, bigint, bigint, bigint] & {
-        roundId: bigint;
         aprTarget: bigint;
         aprBase: bigint;
-        timestamp: bigint;
+        updatedAt: bigint;
+        answeredInRound: bigint;
       }
     ],
     "view"
   >;
 
-  s_sourcePref: TypedContractMethod<[], [bigint], "view">;
+  s_oldestRoundId: TypedContractMethod<[], [bigint], "view">;
 
-  s_staleAfter: TypedContractMethod<[], [bigint], "view">;
+  s_provider: TypedContractMethod<[], [string], "view">;
+
+  s_roundStaleAfter: TypedContractMethod<[], [bigint], "view">;
+
+  s_rounds: TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [bigint, bigint, bigint, bigint] & {
+        aprTarget: bigint;
+        aprBase: bigint;
+        updatedAt: bigint;
+        answeredInRound: bigint;
+      }
+    ],
+    "view"
+  >;
 
   setProvider: TypedContractMethod<
     [provider_: AddressLike],
@@ -491,14 +474,8 @@ export interface AprPairFeed extends BaseContract {
     "nonpayable"
   >;
 
-  setSourcePref: TypedContractMethod<
-    [pref: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
-  setStaleAfter: TypedContractMethod<
-    [staleAfter_: BigNumberish],
+  setRoundStaleAfter: TypedContractMethod<
+    [roundStaleAfter_: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -516,20 +493,17 @@ export interface AprPairFeed extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "APR_LOWER_BOUND"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "APR_UPPER_BOUND"
+    nameOrSignature: "DECIMALS"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "DEFAULT_ADMIN_ROLE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "MAX_ROUNDS"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "UPDATER_FEED_ROLE"
+    nameOrSignature: "KEEPER_ROLE"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "ROUNDS_CAP"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "getRoleAdmin"
   ): TypedContractMethod<[role: BytesLike], [string], "view">;
@@ -575,40 +549,55 @@ export interface AprPairFeed extends BaseContract {
     nameOrSignature: "s_currentRoundId"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "s_description"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "s_latestRound"
+  ): TypedContractMethod<
+    [],
+    [
+      [bigint, bigint, bigint, bigint] & {
+        aprTarget: bigint;
+        aprBase: bigint;
+        updatedAt: bigint;
+        answeredInRound: bigint;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "s_oldestRoundId"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "s_provider"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "s_roundStaleAfter"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "s_rounds"
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
       [bigint, bigint, bigint, bigint] & {
-        roundId: bigint;
         aprTarget: bigint;
         aprBase: bigint;
-        timestamp: bigint;
+        updatedAt: bigint;
+        answeredInRound: bigint;
       }
     ],
     "view"
   >;
   getFunction(
-    nameOrSignature: "s_sourcePref"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_staleAfter"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "setProvider"
   ): TypedContractMethod<[provider_: AddressLike], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "setSourcePref"
-  ): TypedContractMethod<[pref: BigNumberish], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "setStaleAfter"
-  ): TypedContractMethod<[staleAfter_: BigNumberish], [void], "nonpayable">;
+    nameOrSignature: "setRoundStaleAfter"
+  ): TypedContractMethod<
+    [roundStaleAfter_: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "supportsInterface"
   ): TypedContractMethod<[interfaceId: BytesLike], [boolean], "view">;
@@ -617,11 +606,11 @@ export interface AprPairFeed extends BaseContract {
   ): TypedContractMethod<[], [void], "nonpayable">;
 
   getEvent(
-    key: "ProviderUpdated"
+    key: "ProviderSet"
   ): TypedContractEvent<
-    ProviderUpdatedEvent.InputTuple,
-    ProviderUpdatedEvent.OutputTuple,
-    ProviderUpdatedEvent.OutputObject
+    ProviderSetEvent.InputTuple,
+    ProviderSetEvent.OutputTuple,
+    ProviderSetEvent.OutputObject
   >;
   getEvent(
     key: "RoleAdminChanged"
@@ -652,30 +641,23 @@ export interface AprPairFeed extends BaseContract {
     RoundUpdatedEvent.OutputObject
   >;
   getEvent(
-    key: "SourcePrefUpdated"
+    key: "StalePeriodSet"
   ): TypedContractEvent<
-    SourcePrefUpdatedEvent.InputTuple,
-    SourcePrefUpdatedEvent.OutputTuple,
-    SourcePrefUpdatedEvent.OutputObject
-  >;
-  getEvent(
-    key: "StaleAfterUpdated"
-  ): TypedContractEvent<
-    StaleAfterUpdatedEvent.InputTuple,
-    StaleAfterUpdatedEvent.OutputTuple,
-    StaleAfterUpdatedEvent.OutputObject
+    StalePeriodSetEvent.InputTuple,
+    StalePeriodSetEvent.OutputTuple,
+    StalePeriodSetEvent.OutputObject
   >;
 
   filters: {
-    "ProviderUpdated(address)": TypedContractEvent<
-      ProviderUpdatedEvent.InputTuple,
-      ProviderUpdatedEvent.OutputTuple,
-      ProviderUpdatedEvent.OutputObject
+    "ProviderSet(address)": TypedContractEvent<
+      ProviderSetEvent.InputTuple,
+      ProviderSetEvent.OutputTuple,
+      ProviderSetEvent.OutputObject
     >;
-    ProviderUpdated: TypedContractEvent<
-      ProviderUpdatedEvent.InputTuple,
-      ProviderUpdatedEvent.OutputTuple,
-      ProviderUpdatedEvent.OutputObject
+    ProviderSet: TypedContractEvent<
+      ProviderSetEvent.InputTuple,
+      ProviderSetEvent.OutputTuple,
+      ProviderSetEvent.OutputObject
     >;
 
     "RoleAdminChanged(bytes32,bytes32,bytes32)": TypedContractEvent<
@@ -722,26 +704,15 @@ export interface AprPairFeed extends BaseContract {
       RoundUpdatedEvent.OutputObject
     >;
 
-    "SourcePrefUpdated(uint8)": TypedContractEvent<
-      SourcePrefUpdatedEvent.InputTuple,
-      SourcePrefUpdatedEvent.OutputTuple,
-      SourcePrefUpdatedEvent.OutputObject
+    "StalePeriodSet(uint256)": TypedContractEvent<
+      StalePeriodSetEvent.InputTuple,
+      StalePeriodSetEvent.OutputTuple,
+      StalePeriodSetEvent.OutputObject
     >;
-    SourcePrefUpdated: TypedContractEvent<
-      SourcePrefUpdatedEvent.InputTuple,
-      SourcePrefUpdatedEvent.OutputTuple,
-      SourcePrefUpdatedEvent.OutputObject
-    >;
-
-    "StaleAfterUpdated(uint256)": TypedContractEvent<
-      StaleAfterUpdatedEvent.InputTuple,
-      StaleAfterUpdatedEvent.OutputTuple,
-      StaleAfterUpdatedEvent.OutputObject
-    >;
-    StaleAfterUpdated: TypedContractEvent<
-      StaleAfterUpdatedEvent.InputTuple,
-      StaleAfterUpdatedEvent.OutputTuple,
-      StaleAfterUpdatedEvent.OutputObject
+    StalePeriodSet: TypedContractEvent<
+      StalePeriodSetEvent.InputTuple,
+      StalePeriodSetEvent.OutputTuple,
+      StalePeriodSetEvent.OutputObject
     >;
   };
 }

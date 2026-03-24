@@ -22,28 +22,28 @@ import type {
 
 export declare namespace IAprPairFeed {
   export type TRoundStruct = {
-    roundId: BigNumberish;
     aprTarget: BigNumberish;
     aprBase: BigNumberish;
-    timestamp: BigNumberish;
+    updatedAt: BigNumberish;
+    answeredInRound: BigNumberish;
   };
 
   export type TRoundStructOutput = [
-    roundId: bigint,
     aprTarget: bigint,
     aprBase: bigint,
-    timestamp: bigint
+    updatedAt: bigint,
+    answeredInRound: bigint
   ] & {
-    roundId: bigint;
     aprTarget: bigint;
     aprBase: bigint;
-    timestamp: bigint;
+    updatedAt: bigint;
+    answeredInRound: bigint;
   };
 }
 
 export interface IAprPairFeedInterface extends Interface {
   getFunction(
-    nameOrSignature: "getRoundData" | "latestRoundData"
+    nameOrSignature: "getRoundData" | "latestRoundData" | "updateRoundData"
   ): FunctionFragment;
 
   encodeFunctionData(
@@ -54,6 +54,10 @@ export interface IAprPairFeedInterface extends Interface {
     functionFragment: "latestRoundData",
     values?: undefined
   ): string;
+  encodeFunctionData(
+    functionFragment: "updateRoundData",
+    values?: undefined
+  ): string;
 
   decodeFunctionResult(
     functionFragment: "getRoundData",
@@ -61,6 +65,10 @@ export interface IAprPairFeedInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "latestRoundData",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "updateRoundData",
     data: BytesLike
   ): Result;
 }
@@ -120,6 +128,8 @@ export interface IAprPairFeed extends BaseContract {
     "view"
   >;
 
+  updateRoundData: TypedContractMethod<[], [void], "nonpayable">;
+
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
@@ -134,6 +144,9 @@ export interface IAprPairFeed extends BaseContract {
   getFunction(
     nameOrSignature: "latestRoundData"
   ): TypedContractMethod<[], [IAprPairFeed.TRoundStructOutput], "view">;
+  getFunction(
+    nameOrSignature: "updateRoundData"
+  ): TypedContractMethod<[], [void], "nonpayable">;
 
   filters: {};
 }

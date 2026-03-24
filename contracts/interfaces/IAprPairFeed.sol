@@ -13,52 +13,32 @@ pragma solidity ^0.8.24;
  * @dev Returns (aprTarget, aprBase) in int64 with 12 decimals.
  *      1% = 0.01 × 1e12 = 1e10. Supports negative APR (yield decrease).
  *      Two entry points:
- *        getAprPair()     — state-changing (shifts snapshots). Called by Feed PULL update.
- *        getAprPairView() — pure view (reads existing snapshots). Called by Feed fallback.
+ *        getAprPair()     — state-changing (shifts snapshots). Called by Feed updateRoundData().
+ *        getAprPairView() — pure view (reads existing snapshots). Called by Feed latestRoundData() fallback.
  */
 interface IStrategyAprPairProvider {
-    /**
-     * @notice Compute and return the current APR pair (state-changing).
-     * @dev Shifts internal snapshots. Called by AprPairFeed.updateRoundData() (PULL mode).
-     * @return aprTarget Benchmark APR (Aave weighted avg), int64 × 12 decimals
-     * @return aprBase Strategy APR (vault yield), int64 × 12 decimals
-     * @return timestamp Timestamp of the data point
-     */
+    /** @notice Shift snapshots + compute APRs (state-changing). Called by AprPairFeed.updateRoundData(). */
     function getAprPair() external returns (int64 aprTarget, int64 aprBase, uint64 timestamp);
 
-    /**
-     * @notice Read current APR pair without modifying state (view).
-     * @dev Reads existing snapshots only. Called by AprPairFeed.latestRoundData() fallback
-     *      and setProvider() compatibility check. No side effects.
-     * @return aprTarget Benchmark APR (Aave weighted avg), int64 × 12 decimals
-     * @return aprBase Strategy APR (vault yield), int64 × 12 decimals
-     * @return timestamp Timestamp of latest snapshot
-     */
+    /** @notice Read APRs from existing snapshots (pure view, no shift). Called by AprPairFeed.latestRoundData() fallback. */
     function getAprPairView() external view returns (int64 aprTarget, int64 aprBase, uint64 timestamp);
 }
 
 /**
  * @title IAprPairFeed
- * @notice Strata-compatible APR feed with round history and dual-source (PUSH + PULL).
- * @dev Stores APR rounds in a circular buffer. Supports Feed (PUSH) and Strategy (PULL) modes.
+ * @notice Strata-compatible APR feed. PULL only — no PUSH, trustless.
+ * @dev Caches APR pair from provider. 20-round circular buffer.
  *      Accounting reads latestRoundData() to get current APR pair.
  */
 interface IAprPairFeed {
     struct TRound {
-        uint64 roundId;
         int64 aprTarget;
         int64 aprBase;
-        uint64 timestamp;
+        uint64 updatedAt;
+        uint64 answeredInRound;
     }
 
-    enum ESourcePref {
-        Feed,
-        Strategy
-    }
-
-    /** @notice Get the latest APR round data (may call provider view as fallback). */
-    function latestRoundData() external view returns (TRound memory round);
-
-    /** @notice Get a historical APR round by ID. Reverts if overwritten. */
-    function getRoundData(uint64 roundId) external view returns (TRound memory round);
+    function latestRoundData() external view returns (TRound memory);
+    function getRoundData(uint64 roundId) external view returns (TRound memory);
+    function updateRoundData() external;
 }

@@ -149,42 +149,46 @@ Run tests.
 
 ---
 
-## PROMPT 5 — APR Oracle (Strata-inherited, 2 contracts + 4 fixes)
+## PROMPT 5 — APR Oracle (PULL only, trustless, 2 contracts)
 
 ```
 Do Step 5 from docs/PV_V3_APR_ORACLE.md.
 
-IMPORTANT — 4 design fixes vs naive Strata copy:
-  #1 Provider has TWO entry points: getAprPair() (mutate) + getAprPairView() (view)
-     Because our provider shifts snapshots (state-changing), but AprPairFeed.latestRoundData()
-     is a view function that needs fallback. View calls getAprPairView(), update calls getAprPair().
-  #2 aTokenAddress read from Aave getReserveData(), NOT hardcoded immutables.
-     Uses benchmarkTokens[] array (like Strata).
-  #3 Benchmark APR capped at 40% (BENCHMARK_MAX) in provider.
-  #4 Strategy APR clamped to [-50%, +200%] before int64 cast (prevents silent overflow).
+KEY DESIGN: PULL only, NO PUSH mode.
+  - No one can push arbitrary APR data (trustless)
+  - Keeper triggers update, cannot influence output
+  - APR comes 100% from on-chain contracts (Aave + sUSDai)
+  - No ESourcePref, no PUSH overload
+
+Provider has TWO entry points:
+  getAprPair()     — state-changing: shift snapshots + compute (for updateRoundData)
+  getAprPairView() — pure view: read existing snapshots (for latestRoundData fallback)
 
 First create contracts/interfaces/IAprPairFeed.sol:
   IStrategyAprPairProvider:
     - getAprPair() → (int64, int64, uint64) — state-changing
     - getAprPairView() → (int64, int64, uint64) — pure view
-  IAprPairFeed: TRound struct, latestRoundData(), getRoundData()
+  IAprPairFeed: TRound struct, latestRoundData(), getRoundData(), updateRoundData()
 
 Then create 2 contracts:
 
 1. contracts/oracles/providers/SUSDaiAprPairProvider.sol
-   - getAprPair(): shifts snapshots + computes APRs (called by Feed PULL update)
+   - getAprPair(): shifts snapshots + computes APRs (called by Feed PULL)
    - getAprPairView(): reads existing snapshots, NO shift (called by Feed fallback)
    - _computeBenchmarkApr(): Aave weighted avg, benchmarkTokens[], aToken from getReserveData
    - _computeStrategyApr(): annualized growth, supports negative, clamped [-50%, +200%]
+   - Benchmark capped at 40% (BENCHMARK_MAX)
    - Constructor seeds first sUSDai snapshot
    - No hardcoded aToken addresses
 
 2. contracts/oracles/AprPairFeed.sol
-   - latestRoundData(): fallback calls getAprPairView() (NOT getAprPair())
-   - updateRoundData(): PULL calls getAprPair() (shifts snapshots)
-   - updateRoundData(args): PUSH from observer
-   - setProvider(): compatibility check via getAprPairView() (not getAprPair())
-   - Rest identical to Strata: 20 rounds, bounds, ESourcePref, AccessControl
+   - PULL ONLY — no PUSH overload, no ESourcePref
+   - updateRoundData(): KEEPER_ROLE, calls provider.getAprPair() (shifts snapshots)
+   - latestRoundData(): cache if fresh (< staleAfter), else getAprPairView() fallback
+   - 20-round circular buffer with oldestRoundId tracking
+   - Bounds [-50%, +200%], out-of-order + stale timestamp checks
+   - getRoundData(roundId): historical access, revert if outside [oldest, current]
+   - setProvider(): compat check via getAprPairView()
 
 For testing create:
   test/helpers/mocks/MockERC4626.sol — sUSDai with configurable rate
@@ -197,22 +201,25 @@ Write tests:
     - First call (1 snapshot): aprBase = 0
     - Second call: both APRs correct (int64×12dec)
     - Rate decrease: aprBase negative
-    - Extreme rate jump: aprBase clamped at 200% (not overflow)
+    - Extreme rate jump: aprBase clamped at 200%
     - Aave weighted avg: different supplies weighted correctly
     - Benchmark > 40%: capped at BENCHMARK_MAX
     - aTokenAddress read from getReserveData (not hardcoded)
 
   test/unit/AprPairFeed.test.ts
-    - PUSH: stores round, sourcePref = Feed
-    - PULL: calls getAprPair (mutate), stores round, sourcePref = Strategy
-    - latestRoundData Feed mode: returns cache if fresh
-    - latestRoundData Feed mode stale: calls getAprPairView (NOT getAprPair)
-    - latestRoundData Strategy mode: calls getAprPairView
+    - updateRoundData: calls getAprPair, stores round
+    - latestRoundData: returns cache if fresh
+    - latestRoundData: calls getAprPairView if stale (NOT getAprPair)
+    - latestRoundData: calls getAprPairView if no data yet
     - Bounds: revert if APR outside [-50%, +200%]
-    - Out-of-order: revert
-    - getRoundData: historical access
-    - setProvider: calls getAprPairView for compat check (no side effect)
-    - Roles: UPDATER_FEED_ROLE required
+    - Out-of-order timestamp: revert
+    - Stale provider timestamp: revert
+    - getRoundData: returns historical round by ID
+    - getRoundData: revert if roundId outside [oldest, current]
+    - oldestRoundId: tracks correctly as buffer wraps
+    - setProvider: calls getAprPairView for compat check
+    - Roles: only KEEPER_ROLE can call updateRoundData
+    - No PUSH function exists (verify no updateRoundData with args)
 
 Compile + run tests.
 ```
@@ -751,7 +758,7 @@ Fix the file.
 #2   All interfaces
 #3   FixedPointMath + tests
 #4   RiskParams + tests
-#5   APR Oracle: SUSDaiAprPairProvider + AprPairFeed (view/mutate split, bounds, clamp)
+#5   APR Oracle: SUSDaiAprPairProvider + AprPairFeed (PULL only, trustless)
 #6   Accounting Part 1: state + views + tests
 #7   Accounting Part 2: APR + gain splitting + tests
 #8   WETHPriceOracle + mock + tests
