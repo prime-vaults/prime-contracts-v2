@@ -3,4 +3,5 @@
 /* eslint-disable */
 import type * as mockAavePoolSol from "./MockAavePool.sol";
 export type { mockAavePoolSol };
+export type { MockChainlinkFeed } from "./MockChainlinkFeed";
 export type { MockERC4626 } from "./MockERC4626";

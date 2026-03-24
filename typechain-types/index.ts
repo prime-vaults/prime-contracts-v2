@@ -60,6 +60,10 @@ export type { ISwapFacility } from "./contracts/interfaces/ISwapFacility";
 export { ISwapFacility__factory } from "./factories/contracts/interfaces/ISwapFacility__factory";
 export type { IWETHPriceOracle } from "./contracts/interfaces/IWETHPriceOracle";
 export { IWETHPriceOracle__factory } from "./factories/contracts/interfaces/IWETHPriceOracle__factory";
+export type { AggregatorV3Interface } from "./contracts/junior/WETHPriceOracle.sol/AggregatorV3Interface";
+export { AggregatorV3Interface__factory } from "./factories/contracts/junior/WETHPriceOracle.sol/AggregatorV3Interface__factory";
+export type { WETHPriceOracle } from "./contracts/junior/WETHPriceOracle.sol/WETHPriceOracle";
+export { WETHPriceOracle__factory } from "./factories/contracts/junior/WETHPriceOracle.sol/WETHPriceOracle__factory";
 export type { FixedPointMathHarness } from "./contracts/libraries/FixedPointMathHarness";
 export { FixedPointMathHarness__factory } from "./factories/contracts/libraries/FixedPointMathHarness__factory";
 export type { AprPairFeed } from "./contracts/oracles/AprPairFeed";
@@ -72,5 +76,7 @@ export type { MockAavePool } from "./contracts/test/mocks/MockAavePool.sol/MockA
 export { MockAavePool__factory } from "./factories/contracts/test/mocks/MockAavePool.sol/MockAavePool__factory";
 export type { MockAToken } from "./contracts/test/mocks/MockAavePool.sol/MockAToken";
 export { MockAToken__factory } from "./factories/contracts/test/mocks/MockAavePool.sol/MockAToken__factory";
+export type { MockChainlinkFeed } from "./contracts/test/mocks/MockChainlinkFeed";
+export { MockChainlinkFeed__factory } from "./factories/contracts/test/mocks/MockChainlinkFeed__factory";
 export type { MockERC4626 } from "./contracts/test/mocks/MockERC4626";
 export { MockERC4626__factory } from "./factories/contracts/test/mocks/MockERC4626__factory";

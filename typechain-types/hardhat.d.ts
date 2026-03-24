@@ -122,6 +122,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IWETHPriceOracle__factory>;
     getContractFactory(
+      name: "AggregatorV3Interface",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.AggregatorV3Interface__factory>;
+    getContractFactory(
+      name: "WETHPriceOracle",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.WETHPriceOracle__factory>;
+    getContractFactory(
       name: "FixedPointMathHarness",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.FixedPointMathHarness__factory>;
@@ -145,6 +153,10 @@ declare module "hardhat/types/runtime" {
       name: "MockAToken",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockAToken__factory>;
+    getContractFactory(
+      name: "MockChainlinkFeed",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockChainlinkFeed__factory>;
     getContractFactory(
       name: "MockERC4626",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -286,6 +298,16 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IWETHPriceOracle>;
     getContractAt(
+      name: "AggregatorV3Interface",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.AggregatorV3Interface>;
+    getContractAt(
+      name: "WETHPriceOracle",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.WETHPriceOracle>;
+    getContractAt(
       name: "FixedPointMathHarness",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -315,6 +337,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockAToken>;
+    getContractAt(
+      name: "MockChainlinkFeed",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockChainlinkFeed>;
     getContractAt(
       name: "MockERC4626",
       address: string | ethers.Addressable,
@@ -430,6 +457,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IWETHPriceOracle>;
     deployContract(
+      name: "AggregatorV3Interface",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.AggregatorV3Interface>;
+    deployContract(
+      name: "WETHPriceOracle",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.WETHPriceOracle>;
+    deployContract(
       name: "FixedPointMathHarness",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.FixedPointMathHarness>;
@@ -453,6 +488,10 @@ declare module "hardhat/types/runtime" {
       name: "MockAToken",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockAToken>;
+    deployContract(
+      name: "MockChainlinkFeed",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockChainlinkFeed>;
     deployContract(
       name: "MockERC4626",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -594,6 +633,16 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IWETHPriceOracle>;
     deployContract(
+      name: "AggregatorV3Interface",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.AggregatorV3Interface>;
+    deployContract(
+      name: "WETHPriceOracle",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.WETHPriceOracle>;
+    deployContract(
       name: "FixedPointMathHarness",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -623,6 +672,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockAToken>;
+    deployContract(
+      name: "MockChainlinkFeed",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockChainlinkFeed>;
     deployContract(
       name: "MockERC4626",
       args: any[],
