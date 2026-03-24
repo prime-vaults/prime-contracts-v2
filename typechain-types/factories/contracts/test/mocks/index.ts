@@ -3,5 +3,6 @@
 /* eslint-disable */
 export * as mockAavePoolSol from "./MockAavePool.sol";
 export * as mockAavePoolForAdapterSol from "./MockAavePoolForAdapter.sol";
+export * as mockSwapRouterSol from "./MockSwapRouter.sol";
 export { MockChainlinkFeed__factory } from "./MockChainlinkFeed__factory";
 export { MockERC4626__factory } from "./MockERC4626__factory";
