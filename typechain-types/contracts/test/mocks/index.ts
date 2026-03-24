@@ -9,3 +9,4 @@ import type * as mockSwapRouterSol from "./MockSwapRouter.sol";
 export type { mockSwapRouterSol };
 export type { MockChainlinkFeed } from "./MockChainlinkFeed";
 export type { MockERC4626 } from "./MockERC4626";
+export type { MockSUSDai } from "./MockSUSDai";

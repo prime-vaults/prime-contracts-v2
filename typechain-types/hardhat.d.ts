@@ -82,6 +82,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
+      name: "Pausable",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Pausable__factory>;
+    getContractFactory(
       name: "Accounting",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Accounting__factory>;
@@ -178,6 +182,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SUSDaiAprPairProvider__factory>;
     getContractFactory(
+      name: "BaseStrategy",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.BaseStrategy__factory>;
+    getContractFactory(
+      name: "ISUSDai",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ISUSDai__factory>;
+    getContractFactory(
+      name: "SUSDaiStrategy",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SUSDaiStrategy__factory>;
+    getContractFactory(
       name: "MockAavePool",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockAavePool__factory>;
@@ -205,6 +221,10 @@ declare module "hardhat/types/runtime" {
       name: "MockERC4626",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockERC4626__factory>;
+    getContractFactory(
+      name: "MockSUSDai",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockSUSDai__factory>;
     getContractFactory(
       name: "MockBaseAsset",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -300,6 +320,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
+      name: "Pausable",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Pausable>;
+    getContractAt(
       name: "Accounting",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -420,6 +445,21 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.SUSDaiAprPairProvider>;
     getContractAt(
+      name: "BaseStrategy",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.BaseStrategy>;
+    getContractAt(
+      name: "ISUSDai",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ISUSDai>;
+    getContractAt(
+      name: "SUSDaiStrategy",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SUSDaiStrategy>;
+    getContractAt(
       name: "MockAavePool",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -454,6 +494,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockERC4626>;
+    getContractAt(
+      name: "MockSUSDai",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockSUSDai>;
     getContractAt(
       name: "MockBaseAsset",
       address: string | ethers.Addressable,
@@ -534,6 +579,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "Pausable",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Pausable>;
+    deployContract(
       name: "Accounting",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Accounting>;
@@ -630,6 +679,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SUSDaiAprPairProvider>;
     deployContract(
+      name: "BaseStrategy",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.BaseStrategy>;
+    deployContract(
+      name: "ISUSDai",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ISUSDai>;
+    deployContract(
+      name: "SUSDaiStrategy",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SUSDaiStrategy>;
+    deployContract(
       name: "MockAavePool",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockAavePool>;
@@ -657,6 +718,10 @@ declare module "hardhat/types/runtime" {
       name: "MockERC4626",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockERC4626>;
+    deployContract(
+      name: "MockSUSDai",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockSUSDai>;
     deployContract(
       name: "MockBaseAsset",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -752,6 +817,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "Pausable",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Pausable>;
+    deployContract(
       name: "Accounting",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -872,6 +942,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SUSDaiAprPairProvider>;
     deployContract(
+      name: "BaseStrategy",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.BaseStrategy>;
+    deployContract(
+      name: "ISUSDai",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ISUSDai>;
+    deployContract(
+      name: "SUSDaiStrategy",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SUSDaiStrategy>;
+    deployContract(
       name: "MockAavePool",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -906,6 +991,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockERC4626>;
+    deployContract(
+      name: "MockSUSDai",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockSUSDai>;
     deployContract(
       name: "MockBaseAsset",
       args: any[],

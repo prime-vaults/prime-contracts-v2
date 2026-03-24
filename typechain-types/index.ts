@@ -40,6 +40,8 @@ export type { ERC165 } from "./@openzeppelin/contracts/utils/introspection/ERC16
 export { ERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/ERC165__factory";
 export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC165";
 export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
+export type { Pausable } from "./@openzeppelin/contracts/utils/Pausable";
+export { Pausable__factory } from "./factories/@openzeppelin/contracts/utils/Pausable__factory";
 export type { Accounting } from "./contracts/core/Accounting";
 export { Accounting__factory } from "./factories/contracts/core/Accounting__factory";
 export type { RiskParams } from "./contracts/governance/RiskParams";
@@ -88,6 +90,12 @@ export type { IAavePool } from "./contracts/oracles/providers/SUSDaiAprPairProvi
 export { IAavePool__factory } from "./factories/contracts/oracles/providers/SUSDaiAprPairProvider.sol/IAavePool__factory";
 export type { SUSDaiAprPairProvider } from "./contracts/oracles/providers/SUSDaiAprPairProvider.sol/SUSDaiAprPairProvider";
 export { SUSDaiAprPairProvider__factory } from "./factories/contracts/oracles/providers/SUSDaiAprPairProvider.sol/SUSDaiAprPairProvider__factory";
+export type { BaseStrategy } from "./contracts/strategies/BaseStrategy";
+export { BaseStrategy__factory } from "./factories/contracts/strategies/BaseStrategy__factory";
+export type { ISUSDai } from "./contracts/strategies/implementations/SUSDaiStrategy.sol/ISUSDai";
+export { ISUSDai__factory } from "./factories/contracts/strategies/implementations/SUSDaiStrategy.sol/ISUSDai__factory";
+export type { SUSDaiStrategy } from "./contracts/strategies/implementations/SUSDaiStrategy.sol/SUSDaiStrategy";
+export { SUSDaiStrategy__factory } from "./factories/contracts/strategies/implementations/SUSDaiStrategy.sol/SUSDaiStrategy__factory";
 export type { MockAavePool } from "./contracts/test/mocks/MockAavePool.sol/MockAavePool";
 export { MockAavePool__factory } from "./factories/contracts/test/mocks/MockAavePool.sol/MockAavePool__factory";
 export type { MockAToken } from "./contracts/test/mocks/MockAavePool.sol/MockAToken";
@@ -102,6 +110,8 @@ export type { MockChainlinkFeed } from "./contracts/test/mocks/MockChainlinkFeed
 export { MockChainlinkFeed__factory } from "./factories/contracts/test/mocks/MockChainlinkFeed__factory";
 export type { MockERC4626 } from "./contracts/test/mocks/MockERC4626";
 export { MockERC4626__factory } from "./factories/contracts/test/mocks/MockERC4626__factory";
+export type { MockSUSDai } from "./contracts/test/mocks/MockSUSDai";
+export { MockSUSDai__factory } from "./factories/contracts/test/mocks/MockSUSDai__factory";
 export type { MockBaseAsset } from "./contracts/test/mocks/MockSwapRouter.sol/MockBaseAsset";
 export { MockBaseAsset__factory } from "./factories/contracts/test/mocks/MockSwapRouter.sol/MockBaseAsset__factory";
 export type { MockSwapRouter } from "./contracts/test/mocks/MockSwapRouter.sol/MockSwapRouter";
