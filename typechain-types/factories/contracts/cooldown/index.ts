@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export { ERC20Cooldown__factory } from "./ERC20Cooldown__factory";
+export { UnstakeCooldown__factory } from "./UnstakeCooldown__factory";

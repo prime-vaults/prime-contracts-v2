@@ -57,6 +57,7 @@ export interface SUSDaiStrategyInterface extends Interface {
       | "i_baseAsset"
       | "i_primeCDO"
       | "i_sUSDai"
+      | "i_unstakeCooldown"
       | "isActive"
       | "name"
       | "owner"
@@ -113,6 +114,10 @@ export interface SUSDaiStrategyInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "i_sUSDai", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "i_unstakeCooldown",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "isActive", values?: undefined): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
@@ -172,6 +177,10 @@ export interface SUSDaiStrategyInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "i_primeCDO", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "i_sUSDai", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "i_unstakeCooldown",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "isActive", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
@@ -368,6 +377,8 @@ export interface SUSDaiStrategy extends BaseContract {
 
   i_sUSDai: TypedContractMethod<[], [string], "view">;
 
+  i_unstakeCooldown: TypedContractMethod<[], [string], "view">;
+
   isActive: TypedContractMethod<[], [boolean], "view">;
 
   name: TypedContractMethod<[], [string], "view">;
@@ -440,6 +451,9 @@ export interface SUSDaiStrategy extends BaseContract {
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "i_sUSDai"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "i_unstakeCooldown"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "isActive"

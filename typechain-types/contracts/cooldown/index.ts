@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { ERC20Cooldown } from "./ERC20Cooldown";
+export type { UnstakeCooldown } from "./UnstakeCooldown";

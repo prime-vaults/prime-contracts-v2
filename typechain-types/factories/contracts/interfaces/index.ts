@@ -9,6 +9,7 @@ export { ICooldownHandler__factory } from "./ICooldownHandler__factory";
 export { ICooldownRequestImpl__factory } from "./ICooldownRequestImpl__factory";
 export { IPrimeCDO__factory } from "./IPrimeCDO__factory";
 export { IRatioController__factory } from "./IRatioController__factory";
+export { IStakedUSDai__factory } from "./IStakedUSDai__factory";
 export { IStrategy__factory } from "./IStrategy__factory";
 export { ISwapFacility__factory } from "./ISwapFacility__factory";
 export { IWETHPriceOracle__factory } from "./IWETHPriceOracle__factory";

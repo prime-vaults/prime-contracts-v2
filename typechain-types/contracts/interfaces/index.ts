@@ -10,6 +10,7 @@ export type { ICooldownHandler } from "./ICooldownHandler";
 export type { ICooldownRequestImpl } from "./ICooldownRequestImpl";
 export type { IPrimeCDO } from "./IPrimeCDO";
 export type { IRatioController } from "./IRatioController";
+export type { IStakedUSDai } from "./IStakedUSDai";
 export type { IStrategy } from "./IStrategy";
 export type { ISwapFacility } from "./ISwapFacility";
 export type { IWETHPriceOracle } from "./IWETHPriceOracle";

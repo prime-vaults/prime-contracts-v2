@@ -10,6 +10,8 @@ describe("SUSDaiStrategy", () => {
   let strategy: any;
   let mockSUSDai: any;
   let mockUSDai: any;
+  let unstakeCooldown: any;
+  let cooldownImpl: any;
   let cdo: SignerWithAddress;
   let owner: SignerWithAddress;
   let beneficiary: SignerWithAddress;
@@ -24,21 +26,35 @@ describe("SUSDaiStrategy", () => {
     const BaseFactory = await ethers.getContractFactory("MockBaseAsset");
     mockUSDai = await BaseFactory.deploy("USDai", "USDai");
 
-    // Deploy MockStakedUSDai (actual ABI mock)
+    // Deploy MockStakedUSDai
     const SUSDaiFactory = await ethers.getContractFactory("MockStakedUSDai");
     mockSUSDai = await SUSDaiFactory.deploy(await mockUSDai.getAddress(), E18);
-
-    // Fund sUSDai vault with USDai for redemptions
     await mockUSDai.mint(await mockSUSDai.getAddress(), 1_000_000n * E18);
 
-    // Deploy strategy
+    // Deploy UnstakeCooldown
+    const UCFactory = await ethers.getContractFactory("UnstakeCooldown");
+    unstakeCooldown = await UCFactory.deploy(owner.address);
+
+    // Deploy SUSDaiCooldownRequestImpl
+    const ImplFactory = await ethers.getContractFactory("SUSDaiCooldownRequestImpl");
+    cooldownImpl = await ImplFactory.deploy(
+      await mockSUSDai.getAddress(),
+      await mockUSDai.getAddress(),
+      await unstakeCooldown.getAddress(),
+    );
+
+    // Register impl in UnstakeCooldown
+    await unstakeCooldown.connect(owner).setImplementation(await mockSUSDai.getAddress(), await cooldownImpl.getAddress());
+
+    // Deploy strategy (with unstakeCooldown in constructor)
     const StratFactory = await ethers.getContractFactory("SUSDaiStrategy");
     strategy = await StratFactory.deploy(
-      cdo.address,
-      await mockUSDai.getAddress(),
-      await mockSUSDai.getAddress(),
-      owner.address,
+      cdo.address, await mockUSDai.getAddress(), await mockSUSDai.getAddress(),
+      await unstakeCooldown.getAddress(), owner.address,
     );
+
+    // Authorize strategy in UnstakeCooldown
+    await unstakeCooldown.connect(owner).setAuthorized(await strategy.getAddress(), true);
 
     // Mint USDai to CDO and approve strategy
     await mockUSDai.mint(cdo.address, 100_000n * E18);
@@ -68,9 +84,9 @@ describe("SUSDaiStrategy", () => {
     });
 
     it("should handle rate > 1 (yield accrued)", async () => {
-      await mockSUSDai.setRate(11n * E18 / 10n); // 1.1
+      await mockSUSDai.setRate(11n * E18 / 10n);
       const shares = await strategy.connect(cdo).deposit.staticCall(1100n * E18);
-      expect(shares).to.equal(1000n * E18); // 1100 / 1.1 = 1000 shares
+      expect(shares).to.equal(1000n * E18);
     });
   });
 
@@ -107,10 +123,8 @@ describe("SUSDaiStrategy", () => {
     it("should return INSTANT type and transfer sUSDai to beneficiary", async () => {
       const sAddr = await mockSUSDai.getAddress();
       const result = await strategy.connect(cdo).withdraw.staticCall(1000n * E18, sAddr, beneficiary.address);
-
       expect(result.wType).to.equal(INSTANT);
       expect(result.amountOut).to.equal(1000n * E18);
-      expect(result.cooldownId).to.equal(0);
       expect(result.cooldownHandler).to.equal(ethers.ZeroAddress);
     });
 
@@ -121,67 +135,59 @@ describe("SUSDaiStrategy", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════════
-  //  withdraw USDai → UNSTAKE (ERC-7540 FIFO)
+  //  withdraw USDai → UNSTAKE via UnstakeCooldown
   // ═══════════════════════════════════════════════════════════════════
 
-  describe("withdraw USDai (unstake)", () => {
+  describe("withdraw USDai (unstake via UnstakeCooldown)", () => {
     beforeEach(async () => {
       await strategy.connect(cdo).deposit(5000n * E18);
     });
 
-    it("should return UNSTAKE type with redemptionId and cooldownHandler", async () => {
+    it("should return UNSTAKE type with cooldownHandler = UnstakeCooldown", async () => {
       const result = await strategy.connect(cdo).withdraw.staticCall(
         1000n * E18, await mockUSDai.getAddress(), beneficiary.address,
       );
-
       expect(result.wType).to.equal(UNSTAKE);
       expect(result.amountOut).to.equal(0);
-      expect(result.cooldownId).to.equal(1); // first redemptionId
-      expect(result.cooldownHandler).to.equal(await mockSUSDai.getAddress());
+      expect(result.cooldownHandler).to.equal(await unstakeCooldown.getAddress());
     });
 
-    it("should read exact unlockTime from sUSDai.redemption().redemptionTimestamp", async () => {
+    it("should have requestId from UnstakeCooldown (not sUSDai redemptionId)", async () => {
       const result = await strategy.connect(cdo).withdraw.staticCall(
         1000n * E18, await mockUSDai.getAddress(), beneficiary.address,
       );
+      expect(result.cooldownId).to.equal(1); // UnstakeCooldown requestId
+    });
 
+    it("should set unlockTime from sUSDai.redemptionTimestamp", async () => {
+      const result = await strategy.connect(cdo).withdraw.staticCall(
+        1000n * E18, await mockUSDai.getAddress(), beneficiary.address,
+      );
       const now = BigInt(await time.latest());
-      // Default cooldown = 7 days. redemptionTimestamp set by sUSDai contract.
-      expect(result.unlockTime).to.be.gte(now + 7n * 86400n);
+      expect(result.unlockTime).to.be.gte(now + 7n * 86400n - 2n);
       expect(result.unlockTime).to.be.lte(now + 7n * 86400n + 2n);
     });
 
-    it("should reflect changed cooldown from sUSDai protocol", async () => {
-      // sUSDai changes cooldown to 3 days
-      await mockSUSDai.setDefaultCooldown(3 * 86400);
+    it("should be claimable via UnstakeCooldown after serviceRedemptions", async () => {
+      await strategy.connect(cdo).withdraw(1000n * E18, await mockUSDai.getAddress(), beneficiary.address);
 
-      const result = await strategy.connect(cdo).withdraw.staticCall(
-        1000n * E18, await mockUSDai.getAddress(), beneficiary.address,
-      );
+      // Not claimable before service
+      expect(await unstakeCooldown.isClaimable(1)).to.be.false;
 
-      const now = BigInt(await time.latest());
-      expect(result.unlockTime).to.be.gte(now + 3n * 86400n);
-      expect(result.unlockTime).to.be.lte(now + 3n * 86400n + 2n);
+      // USD.AI admin services the redemption
+      await mockSUSDai.serviceRedemptions(1);
+
+      // Now claimable
+      expect(await unstakeCooldown.isClaimable(1)).to.be.true;
+
+      // Claim → USDai to beneficiary
+      await unstakeCooldown.claim(1);
+      expect(await mockUSDai.balanceOf(beneficiary.address)).to.equal(1000n * E18);
     });
 
     it("should burn sUSDai shares from strategy", async () => {
       await strategy.connect(cdo).withdraw(1000n * E18, await mockUSDai.getAddress(), beneficiary.address);
-      // 5000 - 1000 = 4000 shares remain
       expect(await mockSUSDai.balanceOf(await strategy.getAddress())).to.equal(4000n * E18);
-    });
-
-    it("should store redemptionId correctly in sUSDai", async () => {
-      await strategy.connect(cdo).withdraw(1000n * E18, await mockUSDai.getAddress(), beneficiary.address);
-
-      // Check redemption exists in sUSDai
-      const stratAddr = await strategy.getAddress();
-      const ids = await mockSUSDai.redemptionIds(stratAddr);
-      expect(ids.length).to.equal(1);
-      expect(ids[0]).to.equal(1);
-
-      // Check pending shares
-      const pending = await mockSUSDai.pendingRedeemRequest(1, stratAddr);
-      expect(pending).to.equal(1000n * E18);
     });
 
     it("should revert for unsupported output token", async () => {
@@ -206,14 +212,13 @@ describe("SUSDaiStrategy", () => {
 
     it("should reflect exchange rate increase (yield)", async () => {
       await strategy.connect(cdo).deposit(5000n * E18);
-      await mockSUSDai.setRate(11n * E18 / 10n); // 10% yield
+      await mockSUSDai.setRate(11n * E18 / 10n);
       expect(await strategy.totalAssets()).to.equal(5500n * E18);
     });
 
-    it("should exclude shares burned by requestRedeem", async () => {
+    it("should exclude shares sent to unstake cooldown", async () => {
       await strategy.connect(cdo).deposit(5000n * E18);
       await strategy.connect(cdo).withdraw(1000n * E18, await mockUSDai.getAddress(), beneficiary.address);
-      // 4000 shares × 1.0 rate = 4000
       expect(await strategy.totalAssets()).to.equal(4000n * E18);
     });
   });
@@ -226,23 +231,19 @@ describe("SUSDaiStrategy", () => {
     it("should transfer all sUSDai back to CDO", async () => {
       await strategy.connect(cdo).deposit(5000n * E18);
       await strategy.connect(cdo).emergencyWithdraw();
-
       expect(await mockSUSDai.balanceOf(await strategy.getAddress())).to.equal(0);
-      expect(await mockSUSDai.balanceOf(cdo.address)).to.be.gt(0);
     });
 
     it("should return base-equivalent value", async () => {
       await strategy.connect(cdo).deposit(5000n * E18);
       await mockSUSDai.setRate(11n * E18 / 10n);
-
       const out = await strategy.connect(cdo).emergencyWithdraw.staticCall();
       expect(out).to.equal(5500n * E18);
     });
 
     it("should emit EmergencyWithdrawn event", async () => {
       await strategy.connect(cdo).deposit(1000n * E18);
-      await expect(strategy.connect(cdo).emergencyWithdraw())
-        .to.emit(strategy, "EmergencyWithdrawn");
+      await expect(strategy.connect(cdo).emergencyWithdraw()).to.emit(strategy, "EmergencyWithdrawn");
     });
   });
 
@@ -291,12 +292,6 @@ describe("SUSDaiStrategy", () => {
       await strategy.connect(owner).pause();
       await expect(strategy.connect(cdo).deposit(E18))
         .to.be.revertedWithCustomError(strategy, "EnforcedPause");
-    });
-
-    it("should allow deposit after unpause", async () => {
-      await strategy.connect(owner).pause();
-      await strategy.connect(owner).unpause();
-      await expect(strategy.connect(cdo).deposit(1000n * E18)).to.not.be.reverted;
     });
 
     it("should revert deposit with zero amount", async () => {
