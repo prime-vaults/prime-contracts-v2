@@ -66,6 +66,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
+      name: "Accounting",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Accounting__factory>;
+    getContractFactory(
       name: "RiskParams",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.RiskParams__factory>;
@@ -212,6 +216,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
+      name: "Accounting",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Accounting>;
+    getContractAt(
       name: "RiskParams",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -365,6 +374,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "Accounting",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Accounting>;
+    deployContract(
       name: "RiskParams",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.RiskParams>;
@@ -510,6 +523,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
+    deployContract(
+      name: "Accounting",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Accounting>;
     deployContract(
       name: "RiskParams",
       args: any[],

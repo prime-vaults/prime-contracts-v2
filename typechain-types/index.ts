@@ -32,6 +32,8 @@ export type { ERC165 } from "./@openzeppelin/contracts/utils/introspection/ERC16
 export { ERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/ERC165__factory";
 export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC165";
 export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
+export type { Accounting } from "./contracts/core/Accounting";
+export { Accounting__factory } from "./factories/contracts/core/Accounting__factory";
 export type { RiskParams } from "./contracts/governance/RiskParams";
 export { RiskParams__factory } from "./factories/contracts/governance/RiskParams__factory";
 export type { IAaveWETHAdapter } from "./contracts/interfaces/IAaveWETHAdapter";

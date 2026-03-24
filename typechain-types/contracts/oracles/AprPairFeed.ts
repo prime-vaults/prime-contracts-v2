@@ -59,7 +59,6 @@ export interface AprPairFeedInterface extends Interface {
       | "renounceRole"
       | "revokeRole"
       | "s_currentRoundId"
-      | "s_description"
       | "s_latestRound"
       | "s_oldestRoundId"
       | "s_provider"
@@ -124,10 +123,6 @@ export interface AprPairFeedInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "s_currentRoundId",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "s_description",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -198,10 +193,6 @@ export interface AprPairFeedInterface extends Interface {
   decodeFunctionResult(functionFragment: "revokeRole", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "s_currentRoundId",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "s_description",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -434,8 +425,6 @@ export interface AprPairFeed extends BaseContract {
 
   s_currentRoundId: TypedContractMethod<[], [bigint], "view">;
 
-  s_description: TypedContractMethod<[], [string], "view">;
-
   s_latestRound: TypedContractMethod<
     [],
     [
@@ -548,9 +537,6 @@ export interface AprPairFeed extends BaseContract {
   getFunction(
     nameOrSignature: "s_currentRoundId"
   ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_description"
-  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "s_latestRound"
   ): TypedContractMethod<

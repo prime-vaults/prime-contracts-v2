@@ -58,7 +58,6 @@ describe("AprPairFeed", () => {
       admin.address,
       await provider.getAddress(),
       STALE_AFTER,
-      "PrimeVaults sUSDai",
     );
 
     KEEPER_ROLE = await feed.KEEPER_ROLE();
@@ -70,10 +69,6 @@ describe("AprPairFeed", () => {
   // ═══════════════════════════════════════════════════════════════════
 
   describe("constructor", () => {
-    it("should set description", async () => {
-      expect(await feed.s_description()).to.equal("PrimeVaults sUSDai");
-    });
-
     it("should set roundStaleAfter", async () => {
       expect(await feed.s_roundStaleAfter()).to.equal(STALE_AFTER);
     });
