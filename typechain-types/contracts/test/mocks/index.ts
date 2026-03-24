@@ -3,5 +3,7 @@
 /* eslint-disable */
 import type * as mockAavePoolSol from "./MockAavePool.sol";
 export type { mockAavePoolSol };
+import type * as mockAavePoolForAdapterSol from "./MockAavePoolForAdapter.sol";
+export type { mockAavePoolForAdapterSol };
 export type { MockChainlinkFeed } from "./MockChainlinkFeed";
 export type { MockERC4626 } from "./MockERC4626";
