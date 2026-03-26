@@ -104,7 +104,8 @@ describe("PrimeCDO — Withdrawals", () => {
     const CDOFactory = await ethers.getContractFactory("PrimeCDO");
     cdo = await CDOFactory.deploy(
       await accounting.getAddress(), await strategy.getAddress(),
-      await adapter.getAddress(), await oracle.getAddress(), await mockWeth.getAddress(),
+      await adapter.getAddress(), await oracle.getAddress(), ethers.ZeroAddress,
+      await mockWeth.getAddress(),
       await redemptionPolicy.getAddress(), await erc20Cooldown.getAddress(),
       await sharesCooldown.getAddress(), owner.address,
     );

@@ -8,3 +8,4 @@ export { MockChainlinkFeed__factory } from "./MockChainlinkFeed__factory";
 export { MockERC4626__factory } from "./MockERC4626__factory";
 export { MockSUSDai__factory } from "./MockSUSDai__factory";
 export { MockStakedUSDai__factory } from "./MockStakedUSDai__factory";
+export { MockStrategy__factory } from "./MockStrategy__factory";

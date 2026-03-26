@@ -61,12 +61,14 @@ export interface PrimeCDOInterface extends Interface {
       | "claimWithdraw"
       | "deposit"
       | "depositJunior"
+      | "executeWETHCoverage"
       | "i_aaveWETHAdapter"
       | "i_accounting"
       | "i_erc20Cooldown"
       | "i_redemptionPolicy"
       | "i_sharesCooldown"
       | "i_strategy"
+      | "i_swapFacility"
       | "i_weth"
       | "i_wethOracle"
       | "owner"
@@ -99,9 +101,12 @@ export interface PrimeCDOInterface extends Interface {
     nameOrSignatureOrTopic:
       | "OwnershipTransferStarted"
       | "OwnershipTransferred"
+      | "RebalanceBuyExecuted"
+      | "RebalanceSellExecuted"
       | "ShortfallPauseTriggered"
       | "ShortfallUnpaused"
       | "TrancheRegistered"
+      | "WETHCoverageExecuted"
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "PRECISION", values?: undefined): string;
@@ -130,6 +135,10 @@ export interface PrimeCDOInterface extends Interface {
     values: [AddressLike, BigNumberish, BigNumberish, AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "executeWETHCoverage",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "i_aaveWETHAdapter",
     values?: undefined
   ): string;
@@ -151,6 +160,10 @@ export interface PrimeCDOInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "i_strategy",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "i_swapFacility",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "i_weth", values?: undefined): string;
@@ -269,6 +282,10 @@ export interface PrimeCDOInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "executeWETHCoverage",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "i_aaveWETHAdapter",
     data: BytesLike
   ): Result;
@@ -289,6 +306,10 @@ export interface PrimeCDOInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "i_strategy", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "i_swapFacility",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "i_weth", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "i_wethOracle",
@@ -409,6 +430,50 @@ export namespace OwnershipTransferredEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace RebalanceBuyExecutedEvent {
+  export type InputTuple = [
+    baseRecalled: BigNumberish,
+    wethReceived: BigNumberish,
+    newRatio: BigNumberish
+  ];
+  export type OutputTuple = [
+    baseRecalled: bigint,
+    wethReceived: bigint,
+    newRatio: bigint
+  ];
+  export interface OutputObject {
+    baseRecalled: bigint;
+    wethReceived: bigint;
+    newRatio: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RebalanceSellExecutedEvent {
+  export type InputTuple = [
+    wethSold: BigNumberish,
+    baseReceived: BigNumberish,
+    newRatio: BigNumberish
+  ];
+  export type OutputTuple = [
+    wethSold: bigint,
+    baseReceived: bigint,
+    newRatio: bigint
+  ];
+  export interface OutputObject {
+    wethSold: bigint;
+    baseReceived: bigint;
+    newRatio: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace ShortfallPauseTriggeredEvent {
   export type InputTuple = [
     pricePerShare: BigNumberish,
@@ -441,6 +506,28 @@ export namespace TrancheRegisteredEvent {
   export interface OutputObject {
     tranche: bigint;
     vault: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace WETHCoverageExecutedEvent {
+  export type InputTuple = [
+    lossUSD: BigNumberish,
+    wethSold: BigNumberish,
+    baseRecovered: BigNumberish
+  ];
+  export type OutputTuple = [
+    lossUSD: bigint,
+    wethSold: bigint,
+    baseRecovered: bigint
+  ];
+  export interface OutputObject {
+    lossUSD: bigint;
+    wethSold: bigint;
+    baseRecovered: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -526,6 +613,12 @@ export interface PrimeCDO extends BaseContract {
     "nonpayable"
   >;
 
+  executeWETHCoverage: TypedContractMethod<
+    [lossUSD: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   i_aaveWETHAdapter: TypedContractMethod<[], [string], "view">;
 
   i_accounting: TypedContractMethod<[], [string], "view">;
@@ -538,6 +631,8 @@ export interface PrimeCDO extends BaseContract {
 
   i_strategy: TypedContractMethod<[], [string], "view">;
 
+  i_swapFacility: TypedContractMethod<[], [string], "view">;
+
   i_weth: TypedContractMethod<[], [string], "view">;
 
   i_wethOracle: TypedContractMethod<[], [string], "view">;
@@ -546,9 +641,13 @@ export interface PrimeCDO extends BaseContract {
 
   pendingOwner: TypedContractMethod<[], [string], "view">;
 
-  rebalanceBuyWETH: TypedContractMethod<[arg0: BigNumberish], [void], "view">;
+  rebalanceBuyWETH: TypedContractMethod<
+    [maxBaseToRecall: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
-  rebalanceSellWETH: TypedContractMethod<[], [void], "view">;
+  rebalanceSellWETH: TypedContractMethod<[], [void], "nonpayable">;
 
   registerTranche: TypedContractMethod<
     [id: BigNumberish, vault: AddressLike],
@@ -685,6 +784,9 @@ export interface PrimeCDO extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "executeWETHCoverage"
+  ): TypedContractMethod<[lossUSD: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "i_aaveWETHAdapter"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -703,6 +805,9 @@ export interface PrimeCDO extends BaseContract {
     nameOrSignature: "i_strategy"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "i_swapFacility"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "i_weth"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -716,10 +821,10 @@ export interface PrimeCDO extends BaseContract {
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "rebalanceBuyWETH"
-  ): TypedContractMethod<[arg0: BigNumberish], [void], "view">;
+  ): TypedContractMethod<[maxBaseToRecall: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "rebalanceSellWETH"
-  ): TypedContractMethod<[], [void], "view">;
+  ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "registerTranche"
   ): TypedContractMethod<
@@ -820,6 +925,20 @@ export interface PrimeCDO extends BaseContract {
     OwnershipTransferredEvent.OutputObject
   >;
   getEvent(
+    key: "RebalanceBuyExecuted"
+  ): TypedContractEvent<
+    RebalanceBuyExecutedEvent.InputTuple,
+    RebalanceBuyExecutedEvent.OutputTuple,
+    RebalanceBuyExecutedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RebalanceSellExecuted"
+  ): TypedContractEvent<
+    RebalanceSellExecutedEvent.InputTuple,
+    RebalanceSellExecutedEvent.OutputTuple,
+    RebalanceSellExecutedEvent.OutputObject
+  >;
+  getEvent(
     key: "ShortfallPauseTriggered"
   ): TypedContractEvent<
     ShortfallPauseTriggeredEvent.InputTuple,
@@ -839,6 +958,13 @@ export interface PrimeCDO extends BaseContract {
     TrancheRegisteredEvent.InputTuple,
     TrancheRegisteredEvent.OutputTuple,
     TrancheRegisteredEvent.OutputObject
+  >;
+  getEvent(
+    key: "WETHCoverageExecuted"
+  ): TypedContractEvent<
+    WETHCoverageExecutedEvent.InputTuple,
+    WETHCoverageExecutedEvent.OutputTuple,
+    WETHCoverageExecutedEvent.OutputObject
   >;
 
   filters: {
@@ -862,6 +988,28 @@ export interface PrimeCDO extends BaseContract {
       OwnershipTransferredEvent.InputTuple,
       OwnershipTransferredEvent.OutputTuple,
       OwnershipTransferredEvent.OutputObject
+    >;
+
+    "RebalanceBuyExecuted(uint256,uint256,uint256)": TypedContractEvent<
+      RebalanceBuyExecutedEvent.InputTuple,
+      RebalanceBuyExecutedEvent.OutputTuple,
+      RebalanceBuyExecutedEvent.OutputObject
+    >;
+    RebalanceBuyExecuted: TypedContractEvent<
+      RebalanceBuyExecutedEvent.InputTuple,
+      RebalanceBuyExecutedEvent.OutputTuple,
+      RebalanceBuyExecutedEvent.OutputObject
+    >;
+
+    "RebalanceSellExecuted(uint256,uint256,uint256)": TypedContractEvent<
+      RebalanceSellExecutedEvent.InputTuple,
+      RebalanceSellExecutedEvent.OutputTuple,
+      RebalanceSellExecutedEvent.OutputObject
+    >;
+    RebalanceSellExecuted: TypedContractEvent<
+      RebalanceSellExecutedEvent.InputTuple,
+      RebalanceSellExecutedEvent.OutputTuple,
+      RebalanceSellExecutedEvent.OutputObject
     >;
 
     "ShortfallPauseTriggered(uint256,uint256)": TypedContractEvent<
@@ -895,6 +1043,17 @@ export interface PrimeCDO extends BaseContract {
       TrancheRegisteredEvent.InputTuple,
       TrancheRegisteredEvent.OutputTuple,
       TrancheRegisteredEvent.OutputObject
+    >;
+
+    "WETHCoverageExecuted(uint256,uint256,uint256)": TypedContractEvent<
+      WETHCoverageExecutedEvent.InputTuple,
+      WETHCoverageExecutedEvent.OutputTuple,
+      WETHCoverageExecutedEvent.OutputObject
+    >;
+    WETHCoverageExecuted: TypedContractEvent<
+      WETHCoverageExecutedEvent.InputTuple,
+      WETHCoverageExecutedEvent.OutputTuple,
+      WETHCoverageExecutedEvent.OutputObject
     >;
   };
 }

@@ -80,7 +80,8 @@ describe("PrimeCDO — Deposits (per-tranche coverage)", () => {
     const CDOFactory = await ethers.getContractFactory("PrimeCDO");
     cdo = await CDOFactory.deploy(
       await accounting.getAddress(), await strategy.getAddress(),
-      await adapter.getAddress(), await oracle.getAddress(), await mockWeth.getAddress(),
+      await adapter.getAddress(), await oracle.getAddress(), ethers.ZeroAddress,
+      await mockWeth.getAddress(),
       ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, owner.address,
     );
 

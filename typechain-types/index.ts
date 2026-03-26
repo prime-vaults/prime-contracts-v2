@@ -124,6 +124,8 @@ export type { MockERC4626 } from "./contracts/test/mocks/MockERC4626";
 export { MockERC4626__factory } from "./factories/contracts/test/mocks/MockERC4626__factory";
 export type { MockStakedUSDai } from "./contracts/test/mocks/MockStakedUSDai";
 export { MockStakedUSDai__factory } from "./factories/contracts/test/mocks/MockStakedUSDai__factory";
+export type { MockStrategy } from "./contracts/test/mocks/MockStrategy";
+export { MockStrategy__factory } from "./factories/contracts/test/mocks/MockStrategy__factory";
 export type { MockSUSDai } from "./contracts/test/mocks/MockSUSDai";
 export { MockSUSDai__factory } from "./factories/contracts/test/mocks/MockSUSDai__factory";
 export type { MockBaseAsset } from "./contracts/test/mocks/MockSwapRouter.sol/MockBaseAsset";

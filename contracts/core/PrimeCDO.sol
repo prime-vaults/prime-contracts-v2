@@ -16,6 +16,7 @@ import { IAccounting } from "../interfaces/IAccounting.sol";
 import { IStrategy, WithdrawResult, WithdrawType } from "../interfaces/IStrategy.sol";
 import { IAaveWETHAdapter } from "../interfaces/IAaveWETHAdapter.sol";
 import { IWETHPriceOracle } from "../interfaces/IWETHPriceOracle.sol";
+import { ISwapFacility } from "../interfaces/ISwapFacility.sol";
 import { IRatioController } from "../interfaces/IRatioController.sol";
 import { ICooldownHandler, CooldownRequest } from "../interfaces/ICooldownHandler.sol";
 import { RedemptionPolicy } from "../cooldown/RedemptionPolicy.sol";
@@ -45,6 +46,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     IStrategy public immutable i_strategy;
     IAaveWETHAdapter public immutable i_aaveWETHAdapter;
     IWETHPriceOracle public immutable i_wethOracle;
+    ISwapFacility public immutable i_swapFacility;
     address public immutable i_weth;
     RedemptionPolicy public immutable i_redemptionPolicy;
     ICooldownHandler public immutable i_erc20Cooldown;
@@ -80,6 +82,9 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     event ShortfallPauseTriggered(uint256 pricePerShare, uint256 threshold);
     event ShortfallUnpaused();
     event TrancheRegistered(TrancheId indexed tranche, address vault);
+    event WETHCoverageExecuted(uint256 lossUSD, uint256 wethSold, uint256 baseRecovered);
+    event RebalanceSellExecuted(uint256 wethSold, uint256 baseReceived, uint256 newRatio);
+    event RebalanceBuyExecuted(uint256 baseRecalled, uint256 wethReceived, uint256 newRatio);
 
     // ═══════════════════════════════════════════════════════════════════
     //  ERRORS
@@ -89,7 +94,9 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     error PrimeVaults__ShortfallPaused();
     error PrimeVaults__CoverageTooLow(uint256 current, uint256 minimum);
     error PrimeVaults__RatioOutOfBounds(uint256 actual, uint256 target, uint256 tolerance);
+    error PrimeVaults__RatioWithinBounds(uint256 currentRatio);
     error PrimeVaults__ZeroAmount();
+    error PrimeVaults__ExceedsMaxRecall(uint256 requested, uint256 max);
 
     // ═══════════════════════════════════════════════════════════════════
     //  MODIFIERS
@@ -114,6 +121,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         address strategy_,
         address aaveWETHAdapter_,
         address wethOracle_,
+        address swapFacility_,
         address weth_,
         address redemptionPolicy_,
         address erc20Cooldown_,
@@ -124,6 +132,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         i_strategy = IStrategy(strategy_);
         i_aaveWETHAdapter = IAaveWETHAdapter(aaveWETHAdapter_);
         i_wethOracle = IWETHPriceOracle(wethOracle_);
+        i_swapFacility = ISwapFacility(swapFacility_);
         i_weth = weth_;
         i_redemptionPolicy = RedemptionPolicy(redemptionPolicy_);
         i_erc20Cooldown = ICooldownHandler(erc20Cooldown_);
@@ -482,15 +491,164 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  STUBS — Rebalance (Part 3)
+    //  WETH COVERAGE — Loss Layer 0
     // ═══════════════════════════════════════════════════════════════════
 
-    function rebalanceSellWETH() external pure override {
-        revert("not implemented");
+    /**
+     * @notice Sell WETH to cover a strategy loss and inject proceeds directly into strategy.
+     * @dev Layer 0 of the loss waterfall. See docs/PV_V3_FINAL_v34.md section 43.
+     *      Flow: withdraw WETH from Aave → swap to base via SwapFacility → deposit into strategy.
+     *      Uses emergency slippage tier (10%) for the swap.
+     * @param lossUSD Loss amount in USD (base-equivalent, 18 decimals)
+     */
+    function executeWETHCoverage(uint256 lossUSD) external onlyOwner {
+        if (lossUSD == 0) revert PrimeVaults__ZeroAmount();
+
+        _updateAccounting();
+
+        // 1. Determine how much WETH to sell (lossUSD / wethPrice)
+        uint256 wethPrice = i_wethOracle.getWETHPrice();
+        uint256 wethNeeded = (lossUSD * PRECISION) / wethPrice;
+
+        // 2. Cap at available WETH in Aave
+        uint256 wethAvailable = i_aaveWETHAdapter.totalAssets();
+        if (wethNeeded > wethAvailable) wethNeeded = wethAvailable;
+        if (wethNeeded == 0) return;
+
+        // 3. Withdraw WETH from Aave to CDO
+        i_aaveWETHAdapter.withdraw(wethNeeded, address(this));
+
+        // 4. Swap WETH → base asset via SwapFacility (emergency slippage)
+        address baseAsset = i_strategy.baseAsset();
+        uint256 minOut = i_swapFacility.getMinOutput(wethNeeded, wethPrice, true);
+        IERC20(i_weth).forceApprove(address(i_swapFacility), wethNeeded);
+        uint256 baseRecovered = i_swapFacility.swapWETHFor(baseAsset, wethNeeded, minOut);
+
+        // 5. Inject directly into strategy (no registry routing)
+        IERC20(baseAsset).forceApprove(address(i_strategy), baseRecovered);
+        i_strategy.deposit(baseRecovered);
+
+        // 6. Update WETH TVL in accounting
+        i_accounting.setJuniorWethTVL(i_aaveWETHAdapter.totalAssetsUSD());
+
+        emit WETHCoverageExecuted(lossUSD, wethNeeded, baseRecovered);
+
+        _checkJuniorShortfall();
     }
 
-    function rebalanceBuyWETH(uint256) external pure override {
-        revert("not implemented");
+    // ═══════════════════════════════════════════════════════════════════
+    //  REBALANCE — Asymmetric (Section 12)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Sell excess WETH when ratio exceeds target + tolerance (ETH price rose).
+     * @dev Permissionless — anyone can call. Cannot extract value.
+     *      Flow: withdraw excess WETH from Aave → swap to base → deposit into strategy.
+     *      See docs/PV_V3_FINAL_v34.md section 12 (asymmetric rebalance).
+     *      See MATH_REFERENCE §F4 for rebalance amounts.
+     */
+    function rebalanceSellWETH() external override {
+        _updateAccounting();
+
+        // 1. Compute current WETH ratio
+        uint256 wethPrice = i_wethOracle.getWETHPrice();
+        uint256 wethAssets = i_aaveWETHAdapter.totalAssets();
+        uint256 wethValueUSD = (wethAssets * wethPrice) / PRECISION;
+        uint256 juniorTVL = i_accounting.getJuniorTVL();
+
+        if (juniorTVL == 0) revert PrimeVaults__RatioWithinBounds(0);
+
+        uint256 currentRatio = (wethValueUSD * PRECISION) / juniorTVL;
+        uint256 target = _getTargetRatio();
+        uint256 tolerance = _getTolerance(target);
+
+        // 2. Revert if ratio within bounds
+        if (currentRatio <= target + tolerance) revert PrimeVaults__RatioWithinBounds(currentRatio);
+
+        // 3. Compute excess WETH to sell → bring ratio back to target
+        //    excessUSD = wethValueUSD - (target × juniorTVL / PRECISION)
+        uint256 targetWethUSD = (target * juniorTVL) / PRECISION;
+        uint256 excessUSD = wethValueUSD - targetWethUSD;
+        uint256 excessWETH = (excessUSD * PRECISION) / wethPrice;
+
+        // 4. Withdraw from Aave → swap → deposit into strategy
+        i_aaveWETHAdapter.withdraw(excessWETH, address(this));
+
+        address baseAsset = i_strategy.baseAsset();
+        uint256 minOut = i_swapFacility.getMinOutput(excessWETH, wethPrice, false);
+        IERC20(i_weth).forceApprove(address(i_swapFacility), excessWETH);
+        uint256 baseReceived = i_swapFacility.swapWETHFor(baseAsset, excessWETH, minOut);
+
+        IERC20(baseAsset).forceApprove(address(i_strategy), baseReceived);
+        i_strategy.deposit(baseReceived);
+
+        // 5. Update WETH TVL
+        i_accounting.setJuniorWethTVL(i_aaveWETHAdapter.totalAssetsUSD());
+
+        // 6. Compute new ratio for event
+        uint256 newWethUSD = i_aaveWETHAdapter.totalAssetsUSD();
+        uint256 newJrTVL = i_accounting.getJuniorTVL();
+        uint256 newRatio = newJrTVL > 0 ? (newWethUSD * PRECISION) / newJrTVL : 0;
+
+        emit RebalanceSellExecuted(excessWETH, baseReceived, newRatio);
+    }
+
+    /**
+     * @notice Buy WETH when ratio drops below target - tolerance (ETH price dropped).
+     * @dev Governance-only. Recalls base from strategy → swaps to WETH → supplies Aave.
+     *      See docs/PV_V3_FINAL_v34.md section 12.
+     * @param maxBaseToRecall Maximum base asset to recall from strategy (caps exposure)
+     */
+    function rebalanceBuyWETH(uint256 maxBaseToRecall) external override onlyOwner {
+        _updateAccounting();
+
+        // 1. Compute current WETH ratio
+        uint256 wethPrice = i_wethOracle.getWETHPrice();
+        uint256 wethAssets = i_aaveWETHAdapter.totalAssets();
+        uint256 wethValueUSD = (wethAssets * wethPrice) / PRECISION;
+        uint256 juniorTVL = i_accounting.getJuniorTVL();
+
+        if (juniorTVL == 0) revert PrimeVaults__RatioWithinBounds(0);
+
+        uint256 currentRatio = (wethValueUSD * PRECISION) / juniorTVL;
+        uint256 target = _getTargetRatio();
+        uint256 tolerance = _getTolerance(target);
+
+        // 2. Revert if ratio within bounds
+        if (currentRatio >= target - tolerance) revert PrimeVaults__RatioWithinBounds(currentRatio);
+
+        // 3. Compute base needed to buy WETH → bring ratio back to target
+        //    deficitUSD = (target × juniorTVL / PRECISION) - wethValueUSD
+        uint256 targetWethUSD = (target * juniorTVL) / PRECISION;
+        uint256 deficitUSD = targetWethUSD - wethValueUSD;
+
+        // 4. Cap at maxBaseToRecall
+        if (deficitUSD > maxBaseToRecall) deficitUSD = maxBaseToRecall;
+
+        // 5. Recall base from strategy
+        address baseAsset = i_strategy.baseAsset();
+        WithdrawResult memory wr = i_strategy.withdraw(deficitUSD, baseAsset, address(this));
+
+        // 6. Swap base → WETH
+        uint256 baseToSwap = wr.amountOut;
+        uint256 expectedWeth = (baseToSwap * PRECISION) / wethPrice;
+        uint256 minWethOut = (expectedWeth * 9900) / 10_000; // 1% slippage
+        IERC20(baseAsset).forceApprove(address(i_swapFacility), baseToSwap);
+        uint256 wethReceived = i_swapFacility.swapForWETH(baseAsset, baseToSwap, minWethOut);
+
+        // 7. Supply WETH to Aave
+        IERC20(i_weth).forceApprove(address(i_aaveWETHAdapter), wethReceived);
+        i_aaveWETHAdapter.supply(wethReceived);
+
+        // 8. Update accounting
+        i_accounting.setJuniorWethTVL(i_aaveWETHAdapter.totalAssetsUSD());
+
+        // 9. Compute new ratio for event
+        uint256 newWethUSD = i_aaveWETHAdapter.totalAssetsUSD();
+        uint256 newJrTVL = i_accounting.getJuniorTVL();
+        uint256 newRatio = newJrTVL > 0 ? (newWethUSD * PRECISION) / newJrTVL : 0;
+
+        emit RebalanceBuyExecuted(baseToSwap, wethReceived, newRatio);
     }
 
     // ═══════════════════════════════════════════════════════════════════
