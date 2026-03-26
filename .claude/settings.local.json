@@ -11,7 +11,8 @@
       "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2/node_modules -path */hardhat-ethers/signers* -o -path */hardhat-ethers/*/signers*)",
       "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2/node_modules/@nomicfoundation/hardhat-ethers -name *.d.ts)",
       "Bash(grep:*)",
-      "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2/node_modules -path *@aave* -name *.sol)"
+      "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2/node_modules -path *@aave* -name *.sol)",
+      "Bash(find node_modules/@openzeppelin/contracts -name ERC4626*)"
     ]
   }
 }

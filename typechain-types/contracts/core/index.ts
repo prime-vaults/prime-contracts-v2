@@ -3,3 +3,4 @@
 /* eslint-disable */
 export type { Accounting } from "./Accounting";
 export type { PrimeCDO } from "./PrimeCDO";
+export type { TrancheVault } from "./TrancheVault";

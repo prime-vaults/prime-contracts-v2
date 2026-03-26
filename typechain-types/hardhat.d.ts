@@ -54,6 +54,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ERC20__factory>;
     getContractFactory(
+      name: "ERC4626",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ERC4626__factory>;
+    getContractFactory(
       name: "IERC20Metadata",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC20Metadata__factory>;
@@ -82,6 +86,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
+      name: "SafeCast",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SafeCast__factory>;
+    getContractFactory(
       name: "Pausable",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Pausable__factory>;
@@ -109,6 +117,10 @@ declare module "hardhat/types/runtime" {
       name: "PrimeCDO",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.PrimeCDO__factory>;
+    getContractFactory(
+      name: "TrancheVault",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.TrancheVault__factory>;
     getContractFactory(
       name: "RiskParams",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -321,6 +333,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ERC20>;
     getContractAt(
+      name: "ERC4626",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ERC4626>;
+    getContractAt(
       name: "IERC20Metadata",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -356,6 +373,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
+      name: "SafeCast",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SafeCast>;
+    getContractAt(
       name: "Pausable",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -390,6 +412,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.PrimeCDO>;
+    getContractAt(
+      name: "TrancheVault",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.TrancheVault>;
     getContractAt(
       name: "RiskParams",
       address: string | ethers.Addressable,
@@ -632,6 +659,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ERC20>;
     deployContract(
+      name: "ERC4626",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ERC4626>;
+    deployContract(
       name: "IERC20Metadata",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20Metadata>;
@@ -660,6 +691,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "SafeCast",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SafeCast>;
+    deployContract(
       name: "Pausable",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Pausable>;
@@ -687,6 +722,10 @@ declare module "hardhat/types/runtime" {
       name: "PrimeCDO",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.PrimeCDO>;
+    deployContract(
+      name: "TrancheVault",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.TrancheVault>;
     deployContract(
       name: "RiskParams",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -899,6 +938,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ERC20>;
     deployContract(
+      name: "ERC4626",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ERC4626>;
+    deployContract(
       name: "IERC20Metadata",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -934,6 +978,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "SafeCast",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SafeCast>;
+    deployContract(
       name: "Pausable",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -968,6 +1017,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.PrimeCDO>;
+    deployContract(
+      name: "TrancheVault",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.TrancheVault>;
     deployContract(
       name: "RiskParams",
       args: any[],
