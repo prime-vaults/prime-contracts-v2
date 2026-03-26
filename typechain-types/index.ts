@@ -44,6 +44,8 @@ export type { Pausable } from "./@openzeppelin/contracts/utils/Pausable";
 export { Pausable__factory } from "./factories/@openzeppelin/contracts/utils/Pausable__factory";
 export type { ERC20Cooldown } from "./contracts/cooldown/ERC20Cooldown";
 export { ERC20Cooldown__factory } from "./factories/contracts/cooldown/ERC20Cooldown__factory";
+export type { SharesCooldown } from "./contracts/cooldown/SharesCooldown";
+export { SharesCooldown__factory } from "./factories/contracts/cooldown/SharesCooldown__factory";
 export type { UnstakeCooldown } from "./contracts/cooldown/UnstakeCooldown";
 export { UnstakeCooldown__factory } from "./factories/contracts/cooldown/UnstakeCooldown__factory";
 export type { Accounting } from "./contracts/core/Accounting";

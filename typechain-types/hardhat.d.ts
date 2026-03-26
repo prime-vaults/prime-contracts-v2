@@ -90,6 +90,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ERC20Cooldown__factory>;
     getContractFactory(
+      name: "SharesCooldown",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SharesCooldown__factory>;
+    getContractFactory(
       name: "UnstakeCooldown",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.UnstakeCooldown__factory>;
@@ -350,6 +354,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ERC20Cooldown>;
     getContractAt(
+      name: "SharesCooldown",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SharesCooldown>;
+    getContractAt(
       name: "UnstakeCooldown",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -632,6 +641,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ERC20Cooldown>;
     deployContract(
+      name: "SharesCooldown",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SharesCooldown>;
+    deployContract(
       name: "UnstakeCooldown",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.UnstakeCooldown>;
@@ -891,6 +904,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ERC20Cooldown>;
+    deployContract(
+      name: "SharesCooldown",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SharesCooldown>;
     deployContract(
       name: "UnstakeCooldown",
       args: any[],
