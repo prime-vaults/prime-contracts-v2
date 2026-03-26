@@ -2,5 +2,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export { ERC20Cooldown__factory } from "./ERC20Cooldown__factory";
+export { RedemptionPolicy__factory } from "./RedemptionPolicy__factory";
 export { SharesCooldown__factory } from "./SharesCooldown__factory";
 export { UnstakeCooldown__factory } from "./UnstakeCooldown__factory";
