@@ -106,6 +106,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Accounting__factory>;
     getContractFactory(
+      name: "PrimeCDO",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.PrimeCDO__factory>;
+    getContractFactory(
       name: "RiskParams",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.RiskParams__factory>;
@@ -378,6 +382,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.Accounting>;
     getContractAt(
+      name: "PrimeCDO",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.PrimeCDO>;
+    getContractAt(
       name: "RiskParams",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -666,6 +675,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Accounting>;
     deployContract(
+      name: "PrimeCDO",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.PrimeCDO>;
+    deployContract(
       name: "RiskParams",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.RiskParams>;
@@ -937,6 +950,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Accounting>;
+    deployContract(
+      name: "PrimeCDO",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.PrimeCDO>;
     deployContract(
       name: "RiskParams",
       args: any[],

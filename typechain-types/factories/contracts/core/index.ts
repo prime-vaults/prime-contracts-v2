@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export { Accounting__factory } from "./Accounting__factory";
+export { PrimeCDO__factory } from "./PrimeCDO__factory";

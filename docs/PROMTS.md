@@ -566,14 +566,45 @@ Run tests.
 Do Step 15 from docs/PV_V3_MVP_PLAN.md.
 Create contracts/cooldown/RedemptionPolicy.sol.
 
-Coverage-based mechanism selection. See docs/PV_V3_FINAL_v34.md section 28.
+Per-tranche coverage-based mechanism selection.
+See docs/PV_V3_COVERAGE_GATE.md for full spec.
+
+CRITICAL — 2 coverage metrics, NOT 1:
+  cs = (Sr + Mz + Jr) / Sr   → Senior coverage
+  cm = (Mz + Jr) / Mz        → Mezz coverage
+  cj = MIN(cs, cm)            → Junior coverage (affects both)
+
+  Senior withdrawal uses cs
+  Mezz withdrawal uses cm
+  Junior withdrawal uses cj
+
+RedemptionPolicy.getCondition(trancheId, coverage) → (CooldownType, duration, feeBps)
+
+  Per-tranche ranges (governance-configurable):
+    Senior/Mezz:
+      > 200%     → INSTANT,      0 bps,    0 days
+      150-200%   → ASSETS_LOCK,  10 bps,   3 days
+      105-150%   → SHARES_LOCK,  50 bps,   7 days
+      ≤ 105%     → SHARES_LOCK, 100 bps,  14 days
+
+    Junior (higher fees — Jr withdraw hurts coverage):
+      > 200%     → INSTANT,      0 bps,    0 days
+      150-200%   → ASSETS_LOCK,  20 bps,   3 days
+      105-150%   → SHARES_LOCK, 100 bps,   7 days
+      ≤ 105%     → SHARES_LOCK, 200 bps,  14 days
+
+  NO hard block on ANY tranche withdraw. Fee escalation instead.
 
 Write test/unit/RedemptionPolicy.test.ts:
-- Coverage > 2.0x → NONE, 0 fee
-- Coverage 1.5-2.0x → ASSETS_LOCK, 10 bps
-- Coverage < 1.5x → SHARES_LOCK, 50 bps
-- setRanges: validates non-overlapping, ascending
-- getCurrentCoverage: reads from accounting
+  - Senior: cs > 200% → INSTANT, 0 fee
+  - Senior: cs 105-150% → SHARES_LOCK, 50 bps
+  - Mezz: cm > 200% → INSTANT, 0 fee
+  - Mezz: cm ≤ 105% → SHARES_LOCK, 100 bps
+  - Junior: cj > 200% → INSTANT, 0 fee
+  - Junior: cj ≤ 105% → SHARES_LOCK, 200 bps, 14 days
+  - Junior fees higher than Sr/Mz at same coverage
+  - setRanges: validates non-overlapping, ascending
+  - Different ranges per trancheId
 
 Run tests.
 ```
@@ -587,23 +618,32 @@ Do Step 19a-19c from docs/PV_V3_MVP_PLAN.md.
 
 Create contracts/core/PrimeCDO.sol with ONLY:
 - All state variables + constructor
-- Internal helpers: _getTargetRatio, _getTolerance, _getCoverage,
-  _checkJuniorShortfall
-- deposit() for Senior/Mezz — includes coverage gate
-- depositJunior() — includes ratio validation + coverage gate
+- Internal helpers:
+    _getTargetRatio()
+    _getCoverageSenior() → cs = (Sr+Mz+Jr) / Sr
+    _getCoverageMezz()   → cm = (Mz+Jr) / Mz
+    _checkJuniorShortfall()
+- deposit() for Senior/Mezz — includes per-tranche coverage gate
+- depositJunior() — includes ratio validation
+
+CRITICAL — 2 coverage metrics:
+  Senior deposit: require(_getCoverageSenior() >= 1.05e18)
+  Mezz deposit:   require(_getCoverageMezz() >= 1.05e18)
+  Junior deposit: ALWAYS OPEN (no gate — Jr deposit increases both cs and cm)
 
 DO NOT implement withdraw, claims, rebalance, or loss coverage yet.
 
 Reference docs/PV_V3_COVERAGE_GATE.md for coverage gate logic.
-Reference docs/PV_V3_FINAL_v34.md section 11 for ratio hook.
 
 Write test/unit/PrimeCDO.deposit.test.ts:
-- Senior deposit at healthy coverage → succeeds
-- Senior deposit below 105% coverage → reverts
-- Junior deposit always allowed
-- Junior deposit wrong ratio → reverts
-- Junior deposit correct ratio → succeeds
-- Shortfall paused → all deposits revert
+  - Senior deposit at healthy cs → succeeds
+  - Senior deposit at cs < 105% → reverts
+  - Mezz deposit at healthy cm → succeeds
+  - Mezz deposit at cm < 105% → reverts (even if cs is fine)
+  - Junior deposit always allowed (even when cs and cm < 105%)
+  - Junior deposit wrong WETH ratio → reverts
+  - Junior deposit correct ratio → succeeds
+  - Shortfall paused → all deposits revert
 
 Run tests.
 ```
@@ -620,22 +660,33 @@ Continue contracts/core/PrimeCDO.sol. Add:
 - claimSharesWithdraw()
 - instantWithdraw()
 
-Include:
-- Coverage gate: Jr withdraw blocked below 105%
-- Shortfall check on every action
-- RedemptionPolicy query for cooldown type + fee
-- Fee → recordFee (to reserve)
+CRITICAL — Per-tranche coverage for RedemptionPolicy:
+  Senior: coverage = _getCoverageSenior()         (cs)
+  Mezz:   coverage = _getCoverageMezz()           (cm)
+  Junior: coverage = MIN(cs, cm)                  (cj)
 
-Reference docs/PV_V3_FINAL_v34.md sections 39-42 for flows.
+  NO hard block on Junior withdraw. Fee + cooldown escalation:
+    cj ≤ 105% → SHARES_LOCK, 200 bps, 14 days (expensive but allowed)
+
+  Junior fee HIGHER than Sr/Mz at same coverage level.
+  See docs/PV_V3_COVERAGE_GATE.md for full action matrix.
+
+Include:
+  - Shortfall check on every action
+  - RedemptionPolicy query with per-tranche coverage
+  - Fee → recordFee (to reserve)
 
 Write test/unit/PrimeCDO.withdraw.test.ts:
-- Instant withdrawal at high coverage
-- AssetsLock withdrawal at medium coverage
-- SharesLock withdrawal at low coverage
-- Junior withdrawal returns proportional WETH
-- Junior withdraw blocked below 105%
-- Fee calculation correct
-- Claim after cooldown succeeds
+  - Senior instant at cs > 200%
+  - Senior SHARES_LOCK at cs 105-150%, fee 50bps
+  - Mezz instant at cm > 200%
+  - Mezz SHARES_LOCK at cm ≤ 105%, fee 100bps, 14 days
+  - Junior instant at cj > 200%
+  - Junior SHARES_LOCK at cj ≤ 105%, fee 200bps, 14 days (NOT blocked!)
+  - Junior fee > Sr/Mz fee at same coverage
+  - Junior withdrawal returns proportional WETH (instant) + base (cooldown)
+  - Fee calculation correct
+  - Claim after cooldown succeeds
 
 Run tests.
 ```

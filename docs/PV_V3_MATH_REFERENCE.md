@@ -1,6 +1,6 @@
 # PrimeVaults V3 — Tham chiếu Công thức Toán học
 
-**Version:** 3.4.0  
+**Version:** 3.5.0  
 **Phạm vi:** Mọi công thức toán học trong hệ thống  
 **Quy ước:** Tất cả dùng fixed-point 18 decimals (`1e18 = 1.0` hoặc `100%`)  
 **Network:** Arbitrum  
@@ -166,16 +166,53 @@ currentStrategyTVL + currentWethValueUSD
 
 ---
 
-## B3. Leverage Ratio
+## B3. Coverage Metrics (2 per-tranche)
 
 ```
-leverageRatio = TVL_pool / TVL_jr
-              = (TVL_sr + TVL_mz + TVL_jr) / TVL_jr
+cs = (TVL_sr + TVL_mz + TVL_jr) / TVL_sr     (Senior coverage)
+cm = (TVL_mz + TVL_jr) / TVL_mz              (Mezz coverage)
 ```
 
-Đo "Junior đang bảo vệ bao nhiêu". leverageRatio = 10× nghĩa là Junior chiếm 10% pool. Nếu pool mất 10% → Junior mất 100%.
+- `cs` đo "mỗi $1 Senior có bao nhiêu $ pool backing (bao gồm subordination bên dưới)"
+- `cm` đo "mỗi $1 Mezz có bao nhiêu $ (Mz+Jr) backing (chỉ Junior bên dưới)"
+- Senior và Mezz có **protection level khác nhau** → cần metrics riêng
 
-Tên cũ: "coverage ratio". Đổi sang "leverageRatio" vì trong CDO truyền thống, "high coverage" = nhiều protection. Ở đây ngược lại: leverageRatio cao = Junior mỏng = ÍT protection.
+### Ví dụ
+
+```
+Sr=$7M, Mz=$2M, Jr=$1.25M:
+  cs = 10.25/7 = 1.464  (46.4% subordination dưới Senior)
+  cm = 3.25/2 = 1.625   (62.5% Junior protection dưới Mezz)
+
+Sr=$9M, Mz=$0.5M, Jr=$0.3M:
+  cs = 9.8/9 = 1.089    (chỉ 8.9% subordination → Senior gần exposed)
+  cm = 0.8/0.5 = 1.60   (60% Junior → Mezz vẫn OK)
+  → Chỉ Senior đang stressed, không phải Mezz
+  → 1 metric cũ (Pool/Jr=32.7x) không phân biệt được điều này
+```
+
+### Dùng ở đâu
+
+```
+cs: deposit gate Senior, withdrawal policy Senior
+cm: deposit gate Mezz, withdrawal policy Mezz
+MIN(cs, cm): withdrawal policy Junior (Jr rút ảnh hưởng cả cs và cm)
+
+Note: mezzLeverage (E4) = (Mz+Jr)/Jr ≠ cm = (Mz+Jr)/Mz
+  mezzLeverage đo Junior mỏng so với (Mz+Jr) → dùng cho RP2
+  cm đo Mezz có bao nhiêu backing → dùng cho coverage gate
+```
+
+### Edge cases
+
+```
+Sr = 0: cs = ∞ (không có Senior → không cần protection)
+Mz = 0: cm = ∞ (không có Mezz → không cần protection)
+Jr = 0 AND (Sr+Mz) > 0: cs và cm tính bình thường nhưng rất gần 1.0
+  → deposit gates block Sr/Mz (coverage < 105%)
+  → Jr deposit OPEN → recovery path
+Empty protocol (Sr=Mz=Jr=0): cho phép first deposit từ bất kỳ tranche
+```
 
 ---
 
@@ -802,16 +839,59 @@ Rebalance sell: permissionless. Rebalance buy: governance only.
 
 ---
 
-## G1. Exit Fee
+## G1. Withdrawal Policy (per-tranche coverage)
+
+### Coverage metric per tranche
+
+```
+Senior withdrawal: dùng cs = Pool / Sr
+Mezz withdrawal:   dùng cm = (Mz+Jr) / Mz
+Junior withdrawal:  dùng cj = MIN(cs, cm)
+```
+
+### Fee + cooldown ranges
+
+```
+Senior (cs):
+  cs > 200%       → INSTANT,      0 bps,    0 days
+  150% < cs ≤ 200% → ASSETS_LOCK,  10 bps,   3 days
+  105% < cs ≤ 150% → SHARES_LOCK,  50 bps,   7 days
+  cs ≤ 105%       → SHARES_LOCK, 100 bps,  14 days
+
+Mezz (cm):
+  cm > 200%       → INSTANT,      0 bps,    0 days
+  150% < cm ≤ 200% → ASSETS_LOCK,  10 bps,   3 days
+  105% < cm ≤ 150% → SHARES_LOCK,  50 bps,   7 days
+  cm ≤ 105%       → SHARES_LOCK, 100 bps,  14 days
+
+Junior (cj = MIN(cs,cm)):
+  cj > 200%       → INSTANT,      0 bps,    0 days
+  150% < cj ≤ 200% → ASSETS_LOCK,  20 bps,   3 days
+  105% < cj ≤ 150% → SHARES_LOCK, 100 bps,   7 days
+  cj ≤ 105%       → SHARES_LOCK, 200 bps,  14 days
+```
+
+Junior fee cao hơn Sr/Mz ở cùng coverage vì: Jr rút = coverage giảm (harmful), Sr/Mz rút = coverage tăng (beneficial).
+
+**Junior KHÔNG bị hard block.** Fee + cooldown escalation thay vì revert. User luôn có thể rút (trả phí cao + chờ lâu khi stressed).
+
+### Fee calculation
 
 ```
 feeAmount = baseAmount × feeBps / 10_000
 netAmount = baseAmount - feeAmount
-
 feeAmount → TVL_reserve
 ```
 
-Fee phụ thuộc leverageRatio (RedemptionPolicy). leverageRatio cao (Junior mỏng) → fee cao → discourage withdrawal khi stressed.
+### Deposit gates (hard block)
+
+```
+cs ≤ 105% → Senior deposit BLOCKED
+cm ≤ 105% → Mezz deposit BLOCKED
+Junior deposit → ALWAYS OPEN (tăng cs và cm)
+```
+
+Block deposit OK: user chưa bỏ tiền vào → không trap funds.
 
 ---
 
@@ -913,7 +993,7 @@ Xem docs/PV_V3_APR_ORACLE.md cho full spec.
 | A1-A3       | TrancheVault                      | `totalAssets()`, `convertToShares()`, `convertToAssets()` |
 | A4          | SharesCooldown + TrancheVault     | `claim()` → burn at current rate                          |
 | B1-B2       | Accounting                        | `getJuniorTVL()`, `getAllTVLs()`                          |
-| B3          | Accounting / RedemptionPolicy     | `_getLeverageRatio()`                                     |
+| B3          | Accounting / PrimeCDO             | `_getCoverageSenior()`, `_getCoverageMezz()`              |
 | B4          | AaveWETHAdapter + WETHPriceOracle | `totalAssetsUSD()` + `getWETHPrice()`                     |
 | C1-C5       | Accounting                        | `updateTVL()`                                             |
 | D1-D4       | Accounting + PrimeCDO             | `_handleLoss()` + `executeWETHCoverage()`                 |
@@ -962,39 +1042,36 @@ Mỗi tranche trả ĐÚNG 1 loại phí cho layer dưới mình.
 ## Changelog
 
 ```
+v3.5.0 (từ v3.4.0):
+  [REDESIGN] B3: 1 leverageRatio → 2 coverage metrics
+    → cs = Pool/Sr (Senior coverage), cm = (Mz+Jr)/Mz (Mezz coverage)
+    → Mỗi tranche có risk profile riêng → metric riêng
+  [REDESIGN] G1: Withdrawal policy per-tranche coverage
+    → Senior dùng cs, Mezz dùng cm, Junior dùng MIN(cs,cm)
+    → Junior KHÔNG bị hard block — fee + cooldown escalation thay vì revert
+    → Jr fee cao hơn Sr/Mz (Jr rút = coverage giảm)
+  [FIX] Deposit gates: cs<105% block Sr, cm<105% block Mz
+  [NOTE] mezzLeverage (RP2) = (Mz+Jr)/Jr ≠ cm = (Mz+Jr)/Mz — clarified
+
 v3.4.0 (từ v3.3.0):
-  [REDESIGN] E4: RP2 dùng mezzLeverage = (Mz+Jr)/Jr thay vì leverageRatio = Pool/Jr
-    → RP2 chỉ liên quan Mezz vs Junior, Senior TVL không ảnh hưởng RP2
-  [REDESIGN] E5: Senior APR bỏ alpha×RP2. Senior chỉ trả RP1, không trả RP2
-    → APR_sr = MAX(aprTarget, aprBase × (1-RP1)). Clean hơn, dễ hiểu hơn.
-  [REDESIGN] E6: Mezz APR formula mới (multiplicative RP2):
-    → APR_mz = aprBase × (1 + RP1×subLev) × (1-RP2)
-    → RP2 trên TOÀN BỘ income (base + RP1 share), không chỉ base
-    → Không có floor (không MAX(aprTarget,...) cũng không MAX(0,...))
-    → Coverage gates prevent extreme scenarios
-  [REMOVED] E5 alpha/beta split — không cần
-    → RP1: Senior → Mezz+Jr (clear hierarchy)
-    → RP2: Mezz → Jr (clear hierarchy)
-    → Mỗi tranche trả 1 loại phí, không cần chia % qua alpha/beta
-  [REDESIGN] E7: Junior APR display đơn giản hoá thành 2 streams
-    → Base residual + WETH yield (bỏ RP premium stream riêng)
-  [FIX] Constraint: RP1 < 1 thay vì RP1 + alpha×RP2 < 1
+  [REDESIGN] E4: RP2 dùng mezzLeverage = (Mz+Jr)/Jr
+  [REDESIGN] E5: Senior chỉ trả RP1, không trả RP2
+  [REDESIGN] E6: Mezz APR multiplicative: aprBase × (1+RP1×subLev) × (1-RP2)
+  [REMOVED] alpha/beta split
+  [REDESIGN] E7: Junior 2 streams (base residual + WETH)
 
 v3.3.0 (từ v3.2.0):
-  [FIX] C4-C5: Thêm Mezz explicit allocation (3 tranches, 4 cases)
-  [FIX] E2: Tách E1 = aprTarget (Aave), E2 = aprBase (sUSDai snapshots)
-  [FIX] E3 ratio_sr: denominator = cả 3 tranches
-  [FIX] B3: "coverage" → "leverageRatio"
+  [FIX] C4-C5: Mezz explicit allocation (3 tranches, 4 cases)
+  [FIX] E2: Tách E1=aprTarget, E2=aprBase
+  [FIX] E3: ratio_sr denominator = cả 3 tranches
   [FIX] B4: TWAP → Chainlink spot
-  [FIX] G2: sUSDai UnstakeCooldown (redemptionTimestamp + claimableRedeemRequest)
-  [FIX] H1: s_pendingRedeemShares note
-  [FIX] H3: sUSDai only
+  [FIX] G2: sUSDai UnstakeCooldown
 ```
 
 ---
 
-_PrimeVaults V3 — Mathematical Reference v3.4.0_  
+_PrimeVaults V3 — Mathematical Reference v3.5.0_  
 _Arbitrum • sUSDai • 3-tranche gain splitting_  
 _RP1: Senior→Subordination • RP2: Mezz→Junior (multiplicative)_  
-_No alpha/beta • PULL-only APR_  
+_2 coverage metrics: cs (Senior), cm (Mezz) • No Junior withdraw block_  
 _March 2026_

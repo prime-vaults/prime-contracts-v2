@@ -52,6 +52,8 @@ export type { UnstakeCooldown } from "./contracts/cooldown/UnstakeCooldown";
 export { UnstakeCooldown__factory } from "./factories/contracts/cooldown/UnstakeCooldown__factory";
 export type { Accounting } from "./contracts/core/Accounting";
 export { Accounting__factory } from "./factories/contracts/core/Accounting__factory";
+export type { PrimeCDO } from "./contracts/core/PrimeCDO";
+export { PrimeCDO__factory } from "./factories/contracts/core/PrimeCDO__factory";
 export type { RiskParams } from "./contracts/governance/RiskParams";
 export { RiskParams__factory } from "./factories/contracts/governance/RiskParams__factory";
 export type { IAaveWETHAdapter } from "./contracts/interfaces/IAaveWETHAdapter";

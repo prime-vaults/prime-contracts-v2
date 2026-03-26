@@ -27,24 +27,36 @@ export declare namespace RedemptionPolicy {
   export type PolicyResultStruct = {
     mechanism: BigNumberish;
     feeBps: BigNumberish;
+    cooldownDuration: BigNumberish;
   };
 
-  export type PolicyResultStructOutput = [mechanism: bigint, feeBps: bigint] & {
-    mechanism: bigint;
-    feeBps: bigint;
-  };
-
-  export type RangeStruct = {
-    minCoverage: BigNumberish;
-    mechanism: BigNumberish;
-    feeBps: BigNumberish;
-  };
-
-  export type RangeStructOutput = [
-    minCoverage: bigint,
+  export type PolicyResultStructOutput = [
     mechanism: bigint,
-    feeBps: bigint
-  ] & { minCoverage: bigint; mechanism: bigint; feeBps: bigint };
+    feeBps: bigint,
+    cooldownDuration: bigint
+  ] & { mechanism: bigint; feeBps: bigint; cooldownDuration: bigint };
+
+  export type MechanismConfigStruct = {
+    instantFeeBps: BigNumberish;
+    assetsLockFeeBps: BigNumberish;
+    assetsLockDuration: BigNumberish;
+    sharesLockFeeBps: BigNumberish;
+    sharesLockDuration: BigNumberish;
+  };
+
+  export type MechanismConfigStructOutput = [
+    instantFeeBps: bigint,
+    assetsLockFeeBps: bigint,
+    assetsLockDuration: bigint,
+    sharesLockFeeBps: bigint,
+    sharesLockDuration: bigint
+  ] & {
+    instantFeeBps: bigint;
+    assetsLockFeeBps: bigint;
+    assetsLockDuration: bigint;
+    sharesLockFeeBps: bigint;
+    sharesLockDuration: bigint;
+  };
 }
 
 export interface RedemptionPolicyInterface extends Interface {
@@ -55,26 +67,29 @@ export interface RedemptionPolicyInterface extends Interface {
       | "acceptOwnership"
       | "evaluate"
       | "evaluateForCoverage"
-      | "getCurrentCoverage"
+      | "getCoverages"
       | "owner"
       | "pendingOwner"
-      | "rangeCount"
       | "renounceOwnership"
       | "s_accounting"
-      | "s_defaultFeeBps"
-      | "s_defaultMechanism"
-      | "s_ranges"
+      | "s_juniorParams"
+      | "s_mechanismConfig"
+      | "s_mezzParams"
       | "setAccounting"
-      | "setRanges"
+      | "setJuniorParams"
+      | "setMechanismConfig"
+      | "setMezzParams"
       | "transferOwnership"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
       | "AccountingSet"
+      | "JuniorParamsUpdated"
+      | "MechanismConfigUpdated"
+      | "MezzParamsUpdated"
       | "OwnershipTransferStarted"
       | "OwnershipTransferred"
-      | "RangesUpdated"
   ): EventFragment;
 
   encodeFunctionData(
@@ -86,22 +101,21 @@ export interface RedemptionPolicyInterface extends Interface {
     functionFragment: "acceptOwnership",
     values?: undefined
   ): string;
-  encodeFunctionData(functionFragment: "evaluate", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "evaluateForCoverage",
+    functionFragment: "evaluate",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "getCurrentCoverage",
+    functionFragment: "evaluateForCoverage",
+    values: [BigNumberish, BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getCoverages",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "pendingOwner",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "rangeCount",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -113,24 +127,32 @@ export interface RedemptionPolicyInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "s_defaultFeeBps",
+    functionFragment: "s_juniorParams",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "s_defaultMechanism",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "s_ranges",
+    functionFragment: "s_mechanismConfig",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "s_mezzParams",
+    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "setAccounting",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "setRanges",
-    values: [RedemptionPolicy.RangeStruct[], BigNumberish, BigNumberish]
+    functionFragment: "setJuniorParams",
+    values: [BigNumberish, BigNumberish, BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setMechanismConfig",
+    values: [BigNumberish, RedemptionPolicy.MechanismConfigStruct]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setMezzParams",
+    values: [BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "transferOwnership",
@@ -152,7 +174,7 @@ export interface RedemptionPolicyInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "getCurrentCoverage",
+    functionFragment: "getCoverages",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
@@ -160,7 +182,6 @@ export interface RedemptionPolicyInterface extends Interface {
     functionFragment: "pendingOwner",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "rangeCount", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "renounceOwnership",
     data: BytesLike
@@ -170,19 +191,33 @@ export interface RedemptionPolicyInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "s_defaultFeeBps",
+    functionFragment: "s_juniorParams",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "s_defaultMechanism",
+    functionFragment: "s_mechanismConfig",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "s_ranges", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "s_mezzParams",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "setAccounting",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "setRanges", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "setJuniorParams",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setMechanismConfig",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setMezzParams",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
     data: BytesLike
@@ -194,6 +229,56 @@ export namespace AccountingSetEvent {
   export type OutputTuple = [accounting: string];
   export interface OutputObject {
     accounting: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace JuniorParamsUpdatedEvent {
+  export type InputTuple = [
+    instantCs: BigNumberish,
+    instantCm: BigNumberish,
+    assetLockCs: BigNumberish,
+    assetLockCm: BigNumberish
+  ];
+  export type OutputTuple = [
+    instantCs: bigint,
+    instantCm: bigint,
+    assetLockCs: bigint,
+    assetLockCm: bigint
+  ];
+  export interface OutputObject {
+    instantCs: bigint;
+    instantCm: bigint;
+    assetLockCs: bigint;
+    assetLockCm: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace MechanismConfigUpdatedEvent {
+  export type InputTuple = [tranche: BigNumberish];
+  export type OutputTuple = [tranche: bigint];
+  export interface OutputObject {
+    tranche: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace MezzParamsUpdatedEvent {
+  export type InputTuple = [instantCs: BigNumberish, assetLockCs: BigNumberish];
+  export type OutputTuple = [instantCs: bigint, assetLockCs: bigint];
+  export interface OutputObject {
+    instantCs: bigint;
+    assetLockCs: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -220,18 +305,6 @@ export namespace OwnershipTransferredEvent {
   export interface OutputObject {
     previousOwner: string;
     newOwner: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace RangesUpdatedEvent {
-  export type InputTuple = [rangeCount: BigNumberish];
-  export type OutputTuple = [rangeCount: bigint];
-  export interface OutputObject {
-    rangeCount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -289,42 +362,61 @@ export interface RedemptionPolicy extends BaseContract {
   acceptOwnership: TypedContractMethod<[], [void], "nonpayable">;
 
   evaluate: TypedContractMethod<
-    [],
+    [tranche: BigNumberish],
     [RedemptionPolicy.PolicyResultStructOutput],
     "view"
   >;
 
   evaluateForCoverage: TypedContractMethod<
-    [coverage: BigNumberish],
+    [tranche: BigNumberish, cs: BigNumberish, cm: BigNumberish],
     [RedemptionPolicy.PolicyResultStructOutput],
     "view"
   >;
 
-  getCurrentCoverage: TypedContractMethod<[], [bigint], "view">;
+  getCoverages: TypedContractMethod<
+    [],
+    [[bigint, bigint] & { cs: bigint; cm: bigint }],
+    "view"
+  >;
 
   owner: TypedContractMethod<[], [string], "view">;
 
   pendingOwner: TypedContractMethod<[], [string], "view">;
 
-  rangeCount: TypedContractMethod<[], [bigint], "view">;
-
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
 
   s_accounting: TypedContractMethod<[], [string], "view">;
 
-  s_defaultFeeBps: TypedContractMethod<[], [bigint], "view">;
-
-  s_defaultMechanism: TypedContractMethod<[], [bigint], "view">;
-
-  s_ranges: TypedContractMethod<
-    [arg0: BigNumberish],
+  s_juniorParams: TypedContractMethod<
+    [],
     [
-      [bigint, bigint, bigint] & {
-        minCoverage: bigint;
-        mechanism: bigint;
-        feeBps: bigint;
+      [bigint, bigint, bigint, bigint] & {
+        instantCs: bigint;
+        instantCm: bigint;
+        assetLockCs: bigint;
+        assetLockCm: bigint;
       }
     ],
+    "view"
+  >;
+
+  s_mechanismConfig: TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [bigint, bigint, bigint, bigint, bigint] & {
+        instantFeeBps: bigint;
+        assetsLockFeeBps: bigint;
+        assetsLockDuration: bigint;
+        sharesLockFeeBps: bigint;
+        sharesLockDuration: bigint;
+      }
+    ],
+    "view"
+  >;
+
+  s_mezzParams: TypedContractMethod<
+    [],
+    [[bigint, bigint] & { instantCs: bigint; assetLockCs: bigint }],
     "view"
   >;
 
@@ -334,12 +426,25 @@ export interface RedemptionPolicy extends BaseContract {
     "nonpayable"
   >;
 
-  setRanges: TypedContractMethod<
+  setJuniorParams: TypedContractMethod<
     [
-      ranges_: RedemptionPolicy.RangeStruct[],
-      defaultMechanism_: BigNumberish,
-      defaultFeeBps_: BigNumberish
+      instantCs_: BigNumberish,
+      instantCm_: BigNumberish,
+      assetLockCs_: BigNumberish,
+      assetLockCm_: BigNumberish
     ],
+    [void],
+    "nonpayable"
+  >;
+
+  setMechanismConfig: TypedContractMethod<
+    [tranche: BigNumberish, config_: RedemptionPolicy.MechanismConfigStruct],
+    [void],
+    "nonpayable"
+  >;
+
+  setMezzParams: TypedContractMethod<
+    [instantCs_: BigNumberish, assetLockCs_: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -366,20 +471,24 @@ export interface RedemptionPolicy extends BaseContract {
   getFunction(
     nameOrSignature: "evaluate"
   ): TypedContractMethod<
-    [],
+    [tranche: BigNumberish],
     [RedemptionPolicy.PolicyResultStructOutput],
     "view"
   >;
   getFunction(
     nameOrSignature: "evaluateForCoverage"
   ): TypedContractMethod<
-    [coverage: BigNumberish],
+    [tranche: BigNumberish, cs: BigNumberish, cm: BigNumberish],
     [RedemptionPolicy.PolicyResultStructOutput],
     "view"
   >;
   getFunction(
-    nameOrSignature: "getCurrentCoverage"
-  ): TypedContractMethod<[], [bigint], "view">;
+    nameOrSignature: "getCoverages"
+  ): TypedContractMethod<
+    [],
+    [[bigint, bigint] & { cs: bigint; cm: bigint }],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
@@ -387,44 +496,73 @@ export interface RedemptionPolicy extends BaseContract {
     nameOrSignature: "pendingOwner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "rangeCount"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "renounceOwnership"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "s_accounting"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "s_defaultFeeBps"
-  ): TypedContractMethod<[], [bigint], "view">;
+    nameOrSignature: "s_juniorParams"
+  ): TypedContractMethod<
+    [],
+    [
+      [bigint, bigint, bigint, bigint] & {
+        instantCs: bigint;
+        instantCm: bigint;
+        assetLockCs: bigint;
+        assetLockCm: bigint;
+      }
+    ],
+    "view"
+  >;
   getFunction(
-    nameOrSignature: "s_defaultMechanism"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_ranges"
+    nameOrSignature: "s_mechanismConfig"
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [bigint, bigint, bigint] & {
-        minCoverage: bigint;
-        mechanism: bigint;
-        feeBps: bigint;
+      [bigint, bigint, bigint, bigint, bigint] & {
+        instantFeeBps: bigint;
+        assetsLockFeeBps: bigint;
+        assetsLockDuration: bigint;
+        sharesLockFeeBps: bigint;
+        sharesLockDuration: bigint;
       }
     ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "s_mezzParams"
+  ): TypedContractMethod<
+    [],
+    [[bigint, bigint] & { instantCs: bigint; assetLockCs: bigint }],
     "view"
   >;
   getFunction(
     nameOrSignature: "setAccounting"
   ): TypedContractMethod<[accounting_: AddressLike], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "setRanges"
+    nameOrSignature: "setJuniorParams"
   ): TypedContractMethod<
     [
-      ranges_: RedemptionPolicy.RangeStruct[],
-      defaultMechanism_: BigNumberish,
-      defaultFeeBps_: BigNumberish
+      instantCs_: BigNumberish,
+      instantCm_: BigNumberish,
+      assetLockCs_: BigNumberish,
+      assetLockCm_: BigNumberish
     ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "setMechanismConfig"
+  ): TypedContractMethod<
+    [tranche: BigNumberish, config_: RedemptionPolicy.MechanismConfigStruct],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "setMezzParams"
+  ): TypedContractMethod<
+    [instantCs_: BigNumberish, assetLockCs_: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -440,6 +578,27 @@ export interface RedemptionPolicy extends BaseContract {
     AccountingSetEvent.OutputObject
   >;
   getEvent(
+    key: "JuniorParamsUpdated"
+  ): TypedContractEvent<
+    JuniorParamsUpdatedEvent.InputTuple,
+    JuniorParamsUpdatedEvent.OutputTuple,
+    JuniorParamsUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "MechanismConfigUpdated"
+  ): TypedContractEvent<
+    MechanismConfigUpdatedEvent.InputTuple,
+    MechanismConfigUpdatedEvent.OutputTuple,
+    MechanismConfigUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "MezzParamsUpdated"
+  ): TypedContractEvent<
+    MezzParamsUpdatedEvent.InputTuple,
+    MezzParamsUpdatedEvent.OutputTuple,
+    MezzParamsUpdatedEvent.OutputObject
+  >;
+  getEvent(
     key: "OwnershipTransferStarted"
   ): TypedContractEvent<
     OwnershipTransferStartedEvent.InputTuple,
@@ -453,13 +612,6 @@ export interface RedemptionPolicy extends BaseContract {
     OwnershipTransferredEvent.OutputTuple,
     OwnershipTransferredEvent.OutputObject
   >;
-  getEvent(
-    key: "RangesUpdated"
-  ): TypedContractEvent<
-    RangesUpdatedEvent.InputTuple,
-    RangesUpdatedEvent.OutputTuple,
-    RangesUpdatedEvent.OutputObject
-  >;
 
   filters: {
     "AccountingSet(address)": TypedContractEvent<
@@ -471,6 +623,39 @@ export interface RedemptionPolicy extends BaseContract {
       AccountingSetEvent.InputTuple,
       AccountingSetEvent.OutputTuple,
       AccountingSetEvent.OutputObject
+    >;
+
+    "JuniorParamsUpdated(uint256,uint256,uint256,uint256)": TypedContractEvent<
+      JuniorParamsUpdatedEvent.InputTuple,
+      JuniorParamsUpdatedEvent.OutputTuple,
+      JuniorParamsUpdatedEvent.OutputObject
+    >;
+    JuniorParamsUpdated: TypedContractEvent<
+      JuniorParamsUpdatedEvent.InputTuple,
+      JuniorParamsUpdatedEvent.OutputTuple,
+      JuniorParamsUpdatedEvent.OutputObject
+    >;
+
+    "MechanismConfigUpdated(uint8)": TypedContractEvent<
+      MechanismConfigUpdatedEvent.InputTuple,
+      MechanismConfigUpdatedEvent.OutputTuple,
+      MechanismConfigUpdatedEvent.OutputObject
+    >;
+    MechanismConfigUpdated: TypedContractEvent<
+      MechanismConfigUpdatedEvent.InputTuple,
+      MechanismConfigUpdatedEvent.OutputTuple,
+      MechanismConfigUpdatedEvent.OutputObject
+    >;
+
+    "MezzParamsUpdated(uint256,uint256)": TypedContractEvent<
+      MezzParamsUpdatedEvent.InputTuple,
+      MezzParamsUpdatedEvent.OutputTuple,
+      MezzParamsUpdatedEvent.OutputObject
+    >;
+    MezzParamsUpdated: TypedContractEvent<
+      MezzParamsUpdatedEvent.InputTuple,
+      MezzParamsUpdatedEvent.OutputTuple,
+      MezzParamsUpdatedEvent.OutputObject
     >;
 
     "OwnershipTransferStarted(address,address)": TypedContractEvent<
@@ -493,17 +678,6 @@ export interface RedemptionPolicy extends BaseContract {
       OwnershipTransferredEvent.InputTuple,
       OwnershipTransferredEvent.OutputTuple,
       OwnershipTransferredEvent.OutputObject
-    >;
-
-    "RangesUpdated(uint256)": TypedContractEvent<
-      RangesUpdatedEvent.InputTuple,
-      RangesUpdatedEvent.OutputTuple,
-      RangesUpdatedEvent.OutputObject
-    >;
-    RangesUpdated: TypedContractEvent<
-      RangesUpdatedEvent.InputTuple,
-      RangesUpdatedEvent.OutputTuple,
-      RangesUpdatedEvent.OutputObject
     >;
   };
 }

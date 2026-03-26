@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { Accounting } from "./Accounting";
+export type { PrimeCDO } from "./PrimeCDO";
