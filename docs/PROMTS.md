@@ -566,45 +566,54 @@ Run tests.
 Do Step 15 from docs/PV_V3_MVP_PLAN.md.
 Create contracts/cooldown/RedemptionPolicy.sol.
 
-Per-tranche coverage-based mechanism selection.
+Per-tranche withdrawal mechanism selection based on coverage.
 See docs/PV_V3_COVERAGE_GATE.md for full spec.
 
-CRITICAL — 2 coverage metrics, NOT 1:
-  cs = (Sr + Mz + Jr) / Sr   → Senior coverage
-  cm = (Mz + Jr) / Mz        → Mezz coverage
-  cj = MIN(cs, cm)            → Junior coverage (affects both)
+CRITICAL — Each tranche uses different coverage metrics and thresholds:
 
-  Senior withdrawal uses cs
-  Mezz withdrawal uses cm
-  Junior withdrawal uses cj
+  Senior: ALWAYS INSTANT (no evaluation needed)
 
-RedemptionPolicy.getCondition(trancheId, coverage) → (CooldownType, duration, feeBps)
+  Mezz: evaluate by cs = (Sr+Mz+Jr) / Sr
+    struct MezzParams { uint256 instantCs; uint256 assetLockCs; }
+    Default: instantCs = 1.60e18, assetLockCs = 1.40e18
 
-  Per-tranche ranges (governance-configurable):
-    Senior/Mezz:
-      > 200%     → INSTANT,      0 bps,    0 days
-      150-200%   → ASSETS_LOCK,  10 bps,   3 days
-      105-150%   → SHARES_LOCK,  50 bps,   7 days
-      ≤ 105%     → SHARES_LOCK, 100 bps,  14 days
+    _evaluateMezzMechanism(cs):
+      cs > instantCs  → NONE (instant)
+      cs > assetLockCs → ASSETS_LOCK
+      else             → SHARES_LOCK
 
-    Junior (higher fees — Jr withdraw hurts coverage):
-      > 200%     → INSTANT,      0 bps,    0 days
-      150-200%   → ASSETS_LOCK,  20 bps,   3 days
-      105-150%   → SHARES_LOCK, 100 bps,   7 days
-      ≤ 105%     → SHARES_LOCK, 200 bps,  14 days
+  Junior: evaluate by cs AND cm = (Mz+Jr) / Mz
+    struct JuniorParams {
+      uint256 instantCs; uint256 instantCm;
+      uint256 assetLockCs; uint256 assetLockCm;
+    }
+    Default: instantCs=1.60e18, instantCm=1.50e18,
+             assetLockCs=1.40e18, assetLockCm=1.30e18
 
-  NO hard block on ANY tranche withdraw. Fee escalation instead.
+    _evaluateJuniorMechanism(cs, cm):
+      cs > instantCs AND cm > instantCm   → NONE (instant)
+      cs > assetLockCs AND cm > assetLockCm → ASSETS_LOCK
+      else                                  → SHARES_LOCK
+
+  NO hard block on ANY tranche withdraw.
+
+  Fee + cooldown per mechanism (separate per tranche, governance-configurable):
+    INSTANT:     0 bps, 0 days
+    ASSETS_LOCK: e.g. Mezz 10bps/3d, Junior 20bps/3d
+    SHARES_LOCK: e.g. Mezz 50bps/7d, Junior 100-200bps/7-14d
 
 Write test/unit/RedemptionPolicy.test.ts:
-  - Senior: cs > 200% → INSTANT, 0 fee
-  - Senior: cs 105-150% → SHARES_LOCK, 50 bps
-  - Mezz: cm > 200% → INSTANT, 0 fee
-  - Mezz: cm ≤ 105% → SHARES_LOCK, 100 bps
-  - Junior: cj > 200% → INSTANT, 0 fee
-  - Junior: cj ≤ 105% → SHARES_LOCK, 200 bps, 14 days
-  - Junior fees higher than Sr/Mz at same coverage
-  - setRanges: validates non-overlapping, ascending
-  - Different ranges per trancheId
+  - Senior: always returns NONE regardless of coverage
+  - Mezz instant at cs > 160%
+  - Mezz ASSETS_LOCK at 140% < cs ≤ 160%
+  - Mezz SHARES_LOCK at cs ≤ 140%
+  - Junior instant when cs > 160% AND cm > 150%
+  - Junior ASSETS_LOCK when cs > 140% AND cm > 130%
+  - Junior SHARES_LOCK when only cs fails (cs=130%, cm=200%)
+  - Junior SHARES_LOCK when only cm fails (cs=200%, cm=120%)
+  - Junior SHARES_LOCK when both fail
+  - setMezzParams: governance only, validates thresholds
+  - setJuniorParams: governance only, validates thresholds
 
 Run tests.
 ```
@@ -626,24 +635,72 @@ Create contracts/core/PrimeCDO.sol with ONLY:
 - deposit() for Senior/Mezz — includes per-tranche coverage gate
 - depositJunior() — includes ratio validation
 
-CRITICAL — 2 coverage metrics:
-  Senior deposit: require(_getCoverageSenior() >= 1.05e18)
-  Mezz deposit:   require(_getCoverageMezz() >= 1.05e18)
-  Junior deposit: ALWAYS OPEN (no gate — Jr deposit increases both cs and cm)
+CRITICAL — Coverage gate check AFTER deposit, not before.
+Deposit Senior DECREASES cs (Sr grows → (Mz+Jr)/Sr shrinks).
+Deposit Mezz DECREASES cm (Mz grows → Jr/Mz shrinks).
+Must verify coverage AFTER recording deposit.
 
-DO NOT implement withdraw, claims, rebalance, or loss coverage yet.
+Senior/Mezz deposit flow (exact order):
+  1. require(!s_shortfallPaused)
+  2. updateTVL(strategy.totalAssets(), aaveAdapter.totalAssetsUSD())
+  3. Route to strategy: strategy.depositToken(token, amount)
+  4. Record in Accounting: accounting.recordDeposit(tranche, baseAmount)
+  5. Coverage gate AFTER deposit:
+       if SENIOR: require(_getCoverageSenior() >= s_minCoverageForDeposit)
+       if MEZZ:   require(_getCoverageMezz() >= s_minCoverageForDeposit)
+     → Reverts entire tx if coverage drops below 105% after deposit
+  6. _checkJuniorShortfall()
 
-Reference docs/PV_V3_COVERAGE_GATE.md for coverage gate logic.
+  Why check AFTER not BEFORE:
+    cs = 1 + (Mz+Jr)/Sr → Sr deposit always decreases cs
+    cm = 1 + Jr/Mz      → Mz deposit always decreases cm
+    Check before = can still push coverage below threshold
+    Check after  = guarantees post-deposit coverage ≥ 105%
+
+Junior deposit flow (exact order):
+  1. require(!s_shortfallPaused)
+  2. updateTVL(...)
+  3. Validate WETH ratio: |wethRatio - target| ≤ tolerance
+  4. Route base to strategy, WETH to AaveAdapter
+  5. Record in Accounting
+  6. NO coverage gate — Jr deposit INCREASES both cs and cm
+  7. _checkJuniorShortfall()
+
+Coverage formulas:
+  cs = (TVL_sr + TVL_mz + TVL_jr) / TVL_sr
+  cm = (TVL_mz + TVL_jr) / TVL_mz
+
+  Edge cases:
+    Sr=0: cs = ∞ (no Senior → no coverage needed)
+    Mz=0: cm = ∞ (no Mezz → no coverage needed)
+    Jr=0 AND (Sr+Mz)>0: cs/cm both very close to 1.0 → block Sr/Mz deposit
+    Empty protocol: allow first deposit from any tranche
+
+  Code:
+    function _getCoverageSenior() internal view returns (uint256) {
+        (uint256 sr, uint256 mz, uint256 jr) = accounting.getAllTVLs();
+        if (sr == 0) return type(uint256).max;
+        return (sr + mz + jr) * 1e18 / sr;
+    }
+    function _getCoverageMezz() internal view returns (uint256) {
+        (, uint256 mz, uint256 jr) = accounting.getAllTVLs();
+        if (mz == 0) return type(uint256).max;
+        return (mz + jr) * 1e18 / mz;
+    }
 
 Write test/unit/PrimeCDO.deposit.test.ts:
-  - Senior deposit at healthy cs → succeeds
-  - Senior deposit at cs < 105% → reverts
+  - Senior deposit at healthy cs (post-deposit cs > 105%) → succeeds
+  - Senior deposit that would push cs below 105% → reverts
+  - Large Senior deposit when cs already near 105% → reverts
   - Mezz deposit at healthy cm → succeeds
-  - Mezz deposit at cm < 105% → reverts (even if cs is fine)
+  - Mezz deposit that would push cm below 105% → reverts
+  - Mezz deposit blocked (cm<105%) even if cs is fine → independent metrics
   - Junior deposit always allowed (even when cs and cm < 105%)
   - Junior deposit wrong WETH ratio → reverts
-  - Junior deposit correct ratio → succeeds
+  - Junior deposit increases cs and cm → verify both increase
   - Shortfall paused → all deposits revert
+  - First deposit to empty protocol → allowed for any tranche
+  - Edge: Sr=0 deposit first Senior → cs check passes (∞ before, valid after)
 
 Run tests.
 ```
@@ -660,33 +717,67 @@ Continue contracts/core/PrimeCDO.sol. Add:
 - claimSharesWithdraw()
 - instantWithdraw()
 
-CRITICAL — Per-tranche coverage for RedemptionPolicy:
-  Senior: coverage = _getCoverageSenior()         (cs)
-  Mezz:   coverage = _getCoverageMezz()           (cm)
-  Junior: coverage = MIN(cs, cm)                  (cj)
+CRITICAL — Withdrawal policy per tranche:
 
-  NO hard block on Junior withdraw. Fee + cooldown escalation:
-    cj ≤ 105% → SHARES_LOCK, 200 bps, 14 days (expensive but allowed)
+  Senior: ALWAYS INSTANT
+    → Safest tranche, best UX, no delay
+    → No fee, no cooldown
 
-  Junior fee HIGHER than Sr/Mz at same coverage level.
-  See docs/PV_V3_COVERAGE_GATE.md for full action matrix.
+  Mezz: based on cs = (Sr+Mz+Jr) / Sr
+    → cs > 160%       : INSTANT (no fee)
+    → 140% < cs ≤ 160%: ASSETS_LOCK
+    → cs ≤ 140%       : SHARES_LOCK
+    → Mezz leaving hurts Senior subordination → gate by cs
+
+  Junior: based on BOTH cs AND cm = (Mz+Jr) / Mz
+    → cs > 160% AND cm > 150%       : INSTANT (no fee)
+    → cs > 140% AND cm > 130%       : ASSETS_LOCK
+    → otherwise                      : SHARES_LOCK
+    → Junior leaving hurts BOTH cs and cm → must check both
+    → NO hard block. Always allowed (with escalating fee + cooldown)
+
+  Fee + cooldown per CooldownMechanism (governance-configurable):
+    INSTANT:     0 bps,   0 days
+    ASSETS_LOCK: configurable (e.g. 10-20 bps, 3 days)
+    SHARES_LOCK: configurable (e.g. 50-200 bps, 7-14 days)
+    Junior fees should be higher than Mezz at same mechanism
+
+  RedemptionPolicy contract:
+    struct MezzParams { uint256 instantCs; uint256 assetLockCs; }
+    struct JuniorParams { uint256 instantCs; uint256 assetLockCs;
+                          uint256 instantCm; uint256 assetLockCm; }
+
+    _evaluateSeniorMechanism() → always NONE (instant)
+    _evaluateMezzMechanism(cs) → compare cs against MezzParams thresholds
+    _evaluateJuniorMechanism(cs, cm) → both must pass respective thresholds
+
+  Code pattern:
+    (uint256 cs, uint256 cm) = _getCoverages();
+    if (tranche == SENIOR) mechanism = NONE;
+    else if (tranche == MEZZ) mechanism = _evaluateMezzMechanism(cs);
+    else mechanism = _evaluateJuniorMechanism(cs, cm);
 
 Include:
   - Shortfall check on every action
-  - RedemptionPolicy query with per-tranche coverage
   - Fee → recordFee (to reserve)
+  - Junior WETH portion always instant (from Aave)
+  - Junior base portion follows mechanism above
 
 Write test/unit/PrimeCDO.withdraw.test.ts:
-  - Senior instant at cs > 200%
-  - Senior SHARES_LOCK at cs 105-150%, fee 50bps
-  - Mezz instant at cm > 200%
-  - Mezz SHARES_LOCK at cm ≤ 105%, fee 100bps, 14 days
-  - Junior instant at cj > 200%
-  - Junior SHARES_LOCK at cj ≤ 105%, fee 200bps, 14 days (NOT blocked!)
-  - Junior fee > Sr/Mz fee at same coverage
-  - Junior withdrawal returns proportional WETH (instant) + base (cooldown)
-  - Fee calculation correct
+  - Senior withdraw → always instant, 0 fee
+  - Mezz instant at cs > 160%
+  - Mezz ASSETS_LOCK at 140% < cs ≤ 160%
+  - Mezz SHARES_LOCK at cs ≤ 140%
+  - Junior instant when cs > 160% AND cm > 150%
+  - Junior ASSETS_LOCK when cs > 140% AND cm > 130%
+  - Junior SHARES_LOCK when cs ≤ 140% OR cm ≤ 130%
+  - Junior SHARES_LOCK when cs=200% but cm=120% (cm fails → SHARES_LOCK)
+  - Junior SHARES_LOCK when cm=200% but cs=130% (cs fails → SHARES_LOCK)
+  - Junior never blocked (even at extreme low coverage → SHARES_LOCK with high fee)
+  - Junior withdrawal returns proportional WETH (instant) + base (follows mechanism)
+  - Fee calculation correct per mechanism
   - Claim after cooldown succeeds
+  - Shortfall paused → all withdrawals revert
 
 Run tests.
 ```

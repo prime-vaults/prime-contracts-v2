@@ -17,7 +17,7 @@ import { IStrategy, WithdrawResult, WithdrawType } from "../interfaces/IStrategy
 import { IAaveWETHAdapter } from "../interfaces/IAaveWETHAdapter.sol";
 import { IWETHPriceOracle } from "../interfaces/IWETHPriceOracle.sol";
 import { IRatioController } from "../interfaces/IRatioController.sol";
-import { ICooldownHandler } from "../interfaces/ICooldownHandler.sol";
+import { ICooldownHandler, CooldownRequest } from "../interfaces/ICooldownHandler.sol";
 import { RedemptionPolicy } from "../cooldown/RedemptionPolicy.sol";
 
 /**
@@ -55,6 +55,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     // ═══════════════════════════════════════════════════════════════════
 
     mapping(TrancheId => address) public s_tranches;
+    mapping(address => TrancheId) public s_vaultToTranche;
 
     // ═══════════════════════════════════════════════════════════════════
     //  STATE — WETH Ratio (fixed 8:2, with upgrade hook)
@@ -287,7 +288,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
 
     /**
      * @dev NONE mechanism: withdraw from strategy directly to beneficiary.
-     *      Used when coverage is healthy (> 200%).
+     *      Senior: always. Mezz: cs > 160%. Junior: cs > 160% AND cm > 150%.
      */
     function _withdrawInstant(
         TrancheId tranche,
@@ -314,7 +315,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     /**
      * @dev ASSETS_LOCK mechanism: withdraw from strategy to CDO, then lock in ERC20Cooldown.
      *      If strategy returns UNSTAKE instead (external cooldown), pass through.
-     *      Used at medium coverage (150-200%).
+     *      Mezz: 140% < cs ≤ 160%. Junior: cs > 140% AND cm > 130%.
      */
     function _withdrawAssetsLock(
         TrancheId tranche,
@@ -360,8 +361,8 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     /**
      * @dev SHARES_LOCK mechanism: escrow vault shares in SharesCooldown.
      *      Strategy NOT touched — shares stay in totalSupply → TVL preserved → coverage stable.
-     *      At claim: shares return to CDO, CDO burns at current rate (user benefits from yield during cooldown).
-     *      Used at low coverage (< 150%).
+     *      At claim via claimSharesWithdraw(): shares return to CDO, converted at current rate.
+     *      Mezz: cs ≤ 140%. Junior: cs ≤ 140% OR cm ≤ 130%.
      */
     function _withdrawSharesLock(
         TrancheId tranche,
@@ -392,8 +393,10 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Withdraw from Junior tranche: proportional WETH (instant) + base (cooldown).
-     * @dev WETH portion always instant (from Aave). Base portion goes through cooldown.
+     * @notice Withdraw from Junior tranche: proportional WETH (instant) + base (mechanism-routed).
+     * @dev WETH portion always instant (withdrawn from Aave to beneficiary).
+     *      Base portion follows RedemptionPolicy: NONE/ASSETS_LOCK/SHARES_LOCK.
+     *      Junior is NEVER blocked — only fee escalation + cooldown at low coverage.
      */
     function withdrawJunior(
         uint256 baseAmount,
@@ -406,7 +409,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
 
         _updateAccounting();
 
-        // Proportional WETH: userWETH = totalWETH × shares / totalSupply
+        // Proportional WETH: always instant from Aave
         if (totalJuniorShares > 0) {
             uint256 totalWeth = i_aaveWETHAdapter.totalAssets();
             uint256 userWeth = (totalWeth * vaultShares) / totalJuniorShares;
@@ -416,25 +419,20 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
             }
         }
 
-        // Base portion: withdraw from strategy via cooldown flow
+        // Base portion: route through RedemptionPolicy mechanism
         if (baseAmount > 0) {
             RedemptionPolicy.PolicyResult memory policy = i_redemptionPolicy.evaluate(TrancheId.JUNIOR);
             uint256 feeAmount = (baseAmount * policy.feeBps) / 10_000;
             uint256 netAmount = baseAmount - feeAmount;
             if (feeAmount > 0) i_accounting.recordFee(TrancheId.JUNIOR, feeAmount);
 
-            WithdrawResult memory wr = i_strategy.withdraw(netAmount, outputToken, beneficiary);
-            i_accounting.recordWithdraw(TrancheId.JUNIOR, netAmount);
-
-            result = CDOWithdrawResult({
-                isInstant: wr.wType == WithdrawType.INSTANT,
-                amountOut: wr.amountOut,
-                cooldownId: wr.cooldownId,
-                cooldownHandler: wr.cooldownHandler,
-                unlockTime: wr.unlockTime,
-                feeAmount: feeAmount,
-                appliedCooldownType: uint8(wr.wType)
-            });
+            if (policy.mechanism == RedemptionPolicy.CooldownMechanism.NONE) {
+                result = _withdrawInstant(TrancheId.JUNIOR, netAmount, outputToken, beneficiary, feeAmount);
+            } else if (policy.mechanism == RedemptionPolicy.CooldownMechanism.ASSETS_LOCK) {
+                result = _withdrawAssetsLock(TrancheId.JUNIOR, netAmount, outputToken, beneficiary, feeAmount);
+            } else {
+                result = _withdrawSharesLock(TrancheId.JUNIOR, beneficiary, vaultShares, feeAmount);
+            }
         }
 
         _checkJuniorShortfall();
@@ -445,30 +443,42 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Claim a completed cooldown withdrawal.
+     * @notice Claim a completed ERC20Cooldown (ASSETS_LOCK) withdrawal.
      * @dev Delegates to a whitelisted cooldown handler. Callable by anyone.
+     *      Tokens are released directly from the cooldown handler to the beneficiary.
      */
     function claimWithdraw(uint256 cooldownId, address cooldownHandler) external override returns (uint256 amountOut) {
-        if (cooldownHandler != address(i_erc20Cooldown) && cooldownHandler != address(i_sharesCooldown)) {
-            revert PrimeVaults__Unauthorized(cooldownHandler);
-        }
+        if (cooldownHandler != address(i_erc20Cooldown)) revert PrimeVaults__Unauthorized(cooldownHandler);
         amountOut = ICooldownHandler(cooldownHandler).claim(cooldownId);
     }
 
     /**
-     * @notice Process an instant withdrawal (no cooldown).
+     * @notice Claim a completed SharesCooldown (SHARES_LOCK) withdrawal.
+     * @dev Flow: claim shares from SharesCooldown → CDO receives vault shares →
+     *      compute base value at current exchange rate → withdraw from strategy → send to beneficiary.
+     *      User benefits from yield accrued during cooldown (shares appreciated).
+     *      Callable by anyone.
      */
-    function instantWithdraw(
-        TrancheId tranche,
-        uint256 baseAmount,
-        address outputToken,
-        address beneficiary
-    ) external override onlyTranche(tranche) whenNotShortfallPaused returns (uint256 amountOut) {
+    function claimSharesWithdraw(uint256 cooldownId, address outputToken) external override returns (uint256 amountOut) {
+        // 1. Claim shares from SharesCooldown → shares come back to this CDO
+        CooldownRequest memory req = i_sharesCooldown.getRequest(cooldownId);
+        uint256 sharesReturned = i_sharesCooldown.claim(cooldownId);
+
+        // 2. Determine tranche from the vault token stored in the request
+        address vault = req.token;
+        TrancheId tranche = s_vaultToTranche[vault];
+
+        // 3. Compute base value of shares at current exchange rate
+        //    baseAmount = shares × trancheTVL / totalSupply
         _updateAccounting();
-        WithdrawResult memory wr = i_strategy.withdraw(baseAmount, outputToken, beneficiary);
+        uint256 trancheTVL = i_accounting.getTrancheTVL(tranche);
+        uint256 totalSupply = IERC20(vault).totalSupply();
+        uint256 baseAmount = (sharesReturned * trancheTVL) / totalSupply;
+
+        // 4. Record withdraw and withdraw from strategy to beneficiary
         i_accounting.recordWithdraw(tranche, baseAmount);
+        WithdrawResult memory wr = i_strategy.withdraw(baseAmount, outputToken, req.beneficiary);
         amountOut = wr.amountOut;
-        _checkJuniorShortfall();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -489,6 +499,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
 
     function registerTranche(TrancheId id, address vault) external onlyOwner {
         s_tranches[id] = vault;
+        s_vaultToTranche[vault] = id;
         emit TrancheRegistered(id, vault);
     }
 

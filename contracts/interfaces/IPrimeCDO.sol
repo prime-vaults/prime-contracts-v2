@@ -95,7 +95,7 @@ interface IPrimeCDO {
     function withdrawJunior(uint256 baseAmount, address outputToken, address beneficiary, uint256 vaultShares, uint256 totalJuniorShares) external returns (CDOWithdrawResult memory result);
 
     /**
-     * @notice Claim a completed cooldown withdrawal
+     * @notice Claim a completed ERC20Cooldown (ASSETS_LOCK) withdrawal
      * @dev Callable by anyone (beneficiary or on their behalf).
      * @param cooldownId The cooldown request ID to claim
      * @param cooldownHandler Address of the cooldown handler contract holding the request
@@ -104,16 +104,15 @@ interface IPrimeCDO {
     function claimWithdraw(uint256 cooldownId, address cooldownHandler) external returns (uint256 amountOut);
 
     /**
-     * @notice Process an instant withdrawal (no cooldown) for a tranche
-     * @dev Only callable by the registered TrancheVault. Used when RedemptionPolicy
-     *      returns NONE mechanism (healthy coverage).
-     * @param tranche Tranche to withdraw from
-     * @param baseAmount Base-equivalent amount to withdraw
-     * @param outputToken Desired output token
-     * @param beneficiary Address that will receive withdrawn tokens
-     * @return amountOut Actual amount of outputToken transferred
+     * @notice Claim a completed SharesCooldown (SHARES_LOCK) withdrawal
+     * @dev Callable by anyone. Claims shares from SharesCooldown → CDO receives shares →
+     *      CDO converts to base amount at current exchange rate → withdraws from strategy → sends to beneficiary.
+     *      User benefits from yield accrued during the cooldown period.
+     * @param cooldownId The SharesCooldown request ID to claim
+     * @param outputToken Desired output token for the withdrawal
+     * @return amountOut Amount of outputToken transferred to the beneficiary
      */
-    function instantWithdraw(TrancheId tranche, uint256 baseAmount, address outputToken, address beneficiary) external returns (uint256 amountOut);
+    function claimSharesWithdraw(uint256 cooldownId, address outputToken) external returns (uint256 amountOut);
 
     // ═══════════════════════════════════════════════════════════════════
     //  REBALANCE

@@ -7,6 +7,10 @@ const SENIOR = 0;
 const MEZZ = 1;
 const JUNIOR = 2;
 
+const NONE = 0;
+const ASSETS_LOCK = 1;
+const SHARES_LOCK = 2;
+
 describe("PrimeCDO — Withdrawals", () => {
   let cdo: any;
   let accounting: any;
@@ -29,6 +33,7 @@ describe("PrimeCDO — Withdrawals", () => {
   const E18 = 10n ** 18n;
   const E8 = 10n ** 8n;
   const ETH_PRICE = 3000n * E8;
+  const DAY = 86400;
 
   async function seedTVL(tranche: number, amount: bigint) {
     const cdoAddr = await cdo.getAddress();
@@ -66,13 +71,12 @@ describe("PrimeCDO — Withdrawals", () => {
     const AccFactory = await ethers.getContractFactory("Accounting");
     accounting = await AccFactory.deploy(owner.address, await riskParams.getAddress());
 
-    // --- ERC20Cooldown ---
+    // --- Cooldown handlers ---
     const EC20Factory = await ethers.getContractFactory("ERC20Cooldown");
-    erc20Cooldown = await EC20Factory.deploy(owner.address, 7 * 86400, 3 * 86400); // 7d cooldown, 3d expiry
+    erc20Cooldown = await EC20Factory.deploy(owner.address, 3 * DAY, 3 * DAY); // 3d cooldown, 3d expiry
 
-    // --- SharesCooldown ---
     const SCFactory = await ethers.getContractFactory("SharesCooldown");
-    sharesCooldown = await SCFactory.deploy(owner.address, 14 * 86400); // 14d cooldown
+    sharesCooldown = await SCFactory.deploy(owner.address, 7 * DAY); // 7d cooldown
 
     // --- RedemptionPolicy ---
     const RPFactory = await ethers.getContractFactory("RedemptionPolicy");
@@ -118,121 +122,97 @@ describe("PrimeCDO — Withdrawals", () => {
 
     // Fund vaults
     await mockUSDai.mint(seniorVault.address, 100_000n * E18);
+    await mockUSDai.mint(mezzVault.address, 100_000n * E18);
     await mockUSDai.connect(seniorVault).approve(await cdo.getAddress(), ethers.MaxUint256);
+    await mockUSDai.connect(mezzVault).approve(await cdo.getAddress(), ethers.MaxUint256);
 
-    // Seed TVL: Jr=10K, Sr=2K → coverage = 12K/10K = 1.2x
+    // Seed base TVL and deposit real tokens so strategy has assets
     await seedTVL(JUNIOR, 10_000n * E18);
     await seedTVL(SENIOR, 2_000n * E18);
-
-    // Deposit real tokens via CDO so strategy has assets
     await cdo.connect(seniorVault).deposit(SENIOR, await mockUSDai.getAddress(), 5_000n * E18);
+    // State: Sr=7K, Jr=10K → cs = 17K/7K ≈ 2.43x
   });
 
   // ═══════════════════════════════════════════════════════════════════
-  //  Instant withdrawal at high coverage (> 2.0x)
+  //  Senior — ALWAYS INSTANT, no fee, no cooldown
   // ═══════════════════════════════════════════════════════════════════
 
-  describe("instant withdrawal (coverage > 2.0x)", () => {
-    beforeEach(async () => {
-      // Senior coverage: cs = (Sr+Mz+Jr)/Sr. Need cs > 2.0x → Mz+Jr > Sr
-      // With beforeEach: Sr=7K, Jr=10K → cs = 17K/7K ≈ 2.43x ✓
-      // But we already have Sr=2K(seed)+5K(deposit)=7K, Jr=10K(seed)
-      // cs = (7K+0+10K)/7K ≈ 2.43x > 2.0x — already good!
-      // No extra seeding needed.
-    });
-
-    it("should return instant result with isInstant=true", async () => {
+  describe("Senior withdrawal — always instant", () => {
+    it("should return instant result with 0 fee at high coverage", async () => {
+      // cs ≈ 2.43x — healthy
       const result = await cdo.connect(seniorVault).requestWithdraw.staticCall(
         SENIOR, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
       );
       expect(result.isInstant).to.be.true;
-      expect(result.feeAmount).to.equal(0); // 0 bps at > 2.0x
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════════
-  //  AssetsLock at medium coverage (1.5-2.0x)
-  // ═══════════════════════════════════════════════════════════════════
-
-  describe("assetsLock withdrawal (Senior cs 1.5-2.0x)", () => {
-    beforeEach(async () => {
-      // Senior cs = (Sr+Mz+Jr)/Sr. Need 1.5x-2.0x.
-      // With: Sr=7K(existing), need to increase Sr so cs drops.
-      // cs = (Sr+Jr)/Sr = 1 + Jr/Sr. For cs=1.7x: Jr/Sr=0.7 → Sr=Jr/0.7
-      // Seed: Jr=10K(existing), seed more Sr to get Sr≈14.3K → cs=24.3K/14.3K≈1.7x
-      await seedTVL(SENIOR, 7_300n * E18); // total Sr≈14.3K, cs≈(14.3K+10K)/14.3K≈1.7x
+      expect(result.feeAmount).to.equal(0);
     });
 
-    it("should return assetsLock with 10 bps fee", async () => {
-      // Request sUSDai output — strategy returns instant
+    it("should return instant even at low coverage (cs ≈ 1.18x)", async () => {
+      await seedTVL(SENIOR, 50_000n * E18); // Sr=57K, Jr=10K → cs ≈ 1.18x
       const result = await cdo.connect(seniorVault).requestWithdraw.staticCall(
         SENIOR, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
       );
+      expect(result.isInstant).to.be.true;
+      expect(result.feeAmount).to.equal(0);
+    });
+
+    it("should return instant at extreme low coverage (cs ≈ 1.01x)", async () => {
+      await seedTVL(SENIOR, 990_000n * E18); // cs ≈ 1.01x
+      const result = await cdo.connect(seniorVault).requestWithdraw.staticCall(
+        SENIOR, 500n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+      );
+      expect(result.isInstant).to.be.true;
+      expect(result.feeAmount).to.equal(0);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Mezz — instant at cs > 160%
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("Mezz withdrawal — instant (cs > 160%)", () => {
+    beforeEach(async () => {
+      await seedTVL(MEZZ, 1_000n * E18);
+      await cdo.connect(mezzVault).deposit(MEZZ, await mockUSDai.getAddress(), 2_000n * E18);
+      // Sr=7K, Mz=3K, Jr=10K → cs = 20K/7K ≈ 2.86x > 160%
+    });
+
+    it("should return instant result with 0 fee", async () => {
+      const result = await cdo.connect(mezzVault).requestWithdraw.staticCall(
+        MEZZ, 500n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+      );
+      expect(result.isInstant).to.be.true;
+      expect(result.feeAmount).to.equal(0);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Mezz — ASSETS_LOCK at 140% < cs ≤ 160%
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("Mezz withdrawal — ASSETS_LOCK (140% < cs ≤ 160%)", () => {
+    beforeEach(async () => {
+      // Sr=20K, Mz=1.5K, Jr=10K → cs = 31.5K/20K ≈ 1.575x → 140% < 1.575 ≤ 160%
+      await seedTVL(SENIOR, 13_000n * E18);
+      await seedTVL(MEZZ, 1_000n * E18);
+      await cdo.connect(mezzVault).deposit(MEZZ, await mockUSDai.getAddress(), 500n * E18);
+    });
+
+    it("should return ASSETS_LOCK with fee and cooldown handler", async () => {
+      const result = await cdo.connect(mezzVault).requestWithdraw.staticCall(
+        MEZZ, 500n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+      );
       expect(result.isInstant).to.be.false;
-      expect(result.feeAmount).to.equal(1n * E18); // 10 bps of 1000 = 1
       expect(result.appliedCooldownType).to.equal(1); // ASSETS_LOCK
       expect(result.cooldownHandler).to.equal(await erc20Cooldown.getAddress());
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════════
-  //  SharesLock at low coverage (< 1.5x)
-  // ═══════════════════════════════════════════════════════════════════
-
-  describe("sharesLock withdrawal (coverage < 1.5x)", () => {
-    // Default coverage: Jr=10K, Sr=7K → 17K/10K = 1.7x. Need < 1.5x.
-    // Set ranges so current coverage falls into SHARES_LOCK tier.
-    // Actually default is: coverage 1.2x (from beforeEach) → already < 1.5x
-
-    it("should return sharesLock with 50 bps fee at low coverage", async () => {
-      // Coverage from beforeEach: Jr=10K, Sr=7K → 17K/10K = 1.7x
-      // Need to override ranges so 1.7x triggers SHARES_LOCK
-      // OR just test evaluateForCoverage directly:
-      // Actually let's adjust TVL so coverage < 1.5x
-      // beforeEach seeds Jr=10K, Sr=7K → 1.7x
-      // If we withdraw some Jr TVL via seed... let's just test the mechanism
-      // by querying the policy at coverage that would be < 1.5x
-      const result = await redemptionPolicy.evaluateForCoverage(SENIOR, 12n * E18 / 10n); // 1.2x
-      expect(result.mechanism).to.equal(2); // SHARES_LOCK
-      expect(result.feeBps).to.equal(50);
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════════
-  //  Junior withdraw blocked below 105%
-  // ═══════════════════════════════════════════════════════════════════
-
-  describe("junior withdraw — fee escalation (no hard block)", () => {
-    it("should charge higher fee at low coverage instead of blocking", async () => {
-      // Junior at low coverage gets SHARES_LOCK + 200 bps (highest tier)
-      // NOT a hard revert — just expensive
-      const result = await redemptionPolicy.evaluateForCoverage(JUNIOR, E18); // 100%
-      expect(result.feeBps).to.equal(200); // 200 bps — highest Jr fee
-      expect(result.mechanism).to.equal(2); // SHARES_LOCK
+      // Mezz assetsLock fee = 10 bps → 500 * 10/10000 = 0.5
+      expect(result.feeAmount).to.equal(5n * E18 / 10n);
     });
 
-    it("should charge Junior more than Senior at same coverage", async () => {
-      const srResult = await redemptionPolicy.evaluateForCoverage(SENIOR, 12n * E18 / 10n);
-      const jrResult = await redemptionPolicy.evaluateForCoverage(JUNIOR, 12n * E18 / 10n);
-      expect(jrResult.feeBps).to.be.gt(srResult.feeBps);
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════════
-  //  Fee calculation
-  // ═══════════════════════════════════════════════════════════════════
-
-  describe("fee calculation", () => {
-    beforeEach(async () => {
-      // Senior cs = (Sr+Jr)/Sr. Need cs 1.5-2.0x for ASSETS_LOCK (10 bps)
-      // Sr=14.3K(existing 7K + 7.3K seed), Jr=10K → cs≈1.7x
-      await seedTVL(SENIOR, 7_300n * E18);
-    });
-
-    it("should deduct fee from withdrawal and add to reserve", async () => {
+    it("should deduct fee and add to reserve", async () => {
       const reserveBefore = await accounting.s_reserveTVL();
-      await cdo.connect(seniorVault).requestWithdraw(
-        SENIOR, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+      await cdo.connect(mezzVault).requestWithdraw(
+        MEZZ, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
       );
       const reserveAfter = await accounting.s_reserveTVL();
       // 10 bps of 1K = 1 USDai
@@ -241,27 +221,242 @@ describe("PrimeCDO — Withdrawals", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════════
-  //  claimWithdraw
+  //  Mezz — SHARES_LOCK at cs ≤ 140%
   // ═══════════════════════════════════════════════════════════════════
 
-  describe("claimWithdraw", () => {
-    it("should delegate claim to cooldown handler after cooldown period", async () => {
-      // Senior cs 1.5-2.0x for ASSETS_LOCK
-      await seedTVL(SENIOR, 7_300n * E18);
+  describe("Mezz withdrawal — SHARES_LOCK (cs ≤ 140%)", () => {
+    it("should return SHARES_LOCK at cs ≤ 140% via policy evaluation", async () => {
+      const result = await redemptionPolicy.evaluateForCoverage(MEZZ, 130n * E18 / 100n, E18);
+      expect(result.mechanism).to.equal(SHARES_LOCK);
+      expect(result.feeBps).to.equal(50);
+      expect(result.cooldownDuration).to.equal(7 * DAY);
+    });
 
-      // Request withdrawal — goes to ERC20Cooldown
-      await cdo.connect(seniorVault).requestWithdraw(
+    it("should return SHARES_LOCK at cs exactly 140% (not > 140%)", async () => {
+      const result = await redemptionPolicy.evaluateForCoverage(MEZZ, 14n * E18 / 10n, E18);
+      expect(result.mechanism).to.equal(SHARES_LOCK);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Junior — instant when cs > 160% AND cm > 150%
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("Junior withdrawal — instant (cs > 160% AND cm > 150%)", () => {
+    it("should return instant via policy when both coverages high", async () => {
+      const result = await redemptionPolicy.evaluateForCoverage(
+        JUNIOR, 170n * E18 / 100n, 160n * E18 / 100n,
+      );
+      expect(result.mechanism).to.equal(NONE);
+      expect(result.feeBps).to.equal(0);
+      expect(result.cooldownDuration).to.equal(0);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Junior — ASSETS_LOCK when cs > 140% AND cm > 130%
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("Junior withdrawal — ASSETS_LOCK (cs > 140% AND cm > 130%)", () => {
+    it("should return ASSETS_LOCK when both pass mid thresholds but not instant", async () => {
+      // cs=150% (≤160%), cm=140% (≤150%) → not instant. cm>130% && cs>140% → ASSETS_LOCK
+      const result = await redemptionPolicy.evaluateForCoverage(
+        JUNIOR, 150n * E18 / 100n, 140n * E18 / 100n,
+      );
+      expect(result.mechanism).to.equal(ASSETS_LOCK);
+      expect(result.feeBps).to.equal(20);
+      expect(result.cooldownDuration).to.equal(3 * DAY);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Junior — SHARES_LOCK when cs ≤ 140% OR cm ≤ 130%
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("Junior withdrawal — SHARES_LOCK (coverage too low)", () => {
+    it("should return SHARES_LOCK when both coverages low", async () => {
+      const result = await redemptionPolicy.evaluateForCoverage(JUNIOR, E18, E18);
+      expect(result.mechanism).to.equal(SHARES_LOCK);
+      expect(result.feeBps).to.equal(100);
+      expect(result.cooldownDuration).to.equal(7 * DAY);
+    });
+
+    it("should return SHARES_LOCK when cs=200% but cm=120% (cm fails)", async () => {
+      const result = await redemptionPolicy.evaluateForCoverage(
+        JUNIOR, 200n * E18 / 100n, 120n * E18 / 100n,
+      );
+      expect(result.mechanism).to.equal(SHARES_LOCK);
+    });
+
+    it("should return SHARES_LOCK when cm=200% but cs=130% (cs fails)", async () => {
+      const result = await redemptionPolicy.evaluateForCoverage(
+        JUNIOR, 130n * E18 / 100n, 200n * E18 / 100n,
+      );
+      expect(result.mechanism).to.equal(SHARES_LOCK);
+    });
+
+    it("should NEVER block Junior (extreme low → SHARES_LOCK with high fee)", async () => {
+      // Even at cs=100%, cm=100% → still allowed, just SHARES_LOCK
+      const result = await redemptionPolicy.evaluateForCoverage(JUNIOR, E18, E18);
+      expect(result.mechanism).to.equal(SHARES_LOCK);
+      expect(result.feeBps).to.equal(100); // 100 bps — highest Jr shares lock fee
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Junior — fees higher than Mezz at same mechanism
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("Junior fees higher than Mezz", () => {
+    it("ASSETS_LOCK: Junior 20 bps > Mezz 10 bps", async () => {
+      // Both in ASSETS_LOCK range
+      const mzResult = await redemptionPolicy.evaluateForCoverage(MEZZ, 150n * E18 / 100n, E18);
+      const jrResult = await redemptionPolicy.evaluateForCoverage(JUNIOR, 150n * E18 / 100n, 140n * E18 / 100n);
+      expect(mzResult.mechanism).to.equal(ASSETS_LOCK);
+      expect(jrResult.mechanism).to.equal(ASSETS_LOCK);
+      expect(jrResult.feeBps).to.be.gt(mzResult.feeBps);
+    });
+
+    it("SHARES_LOCK: Junior 100 bps > Mezz 50 bps", async () => {
+      const mzResult = await redemptionPolicy.evaluateForCoverage(MEZZ, E18, E18);
+      const jrResult = await redemptionPolicy.evaluateForCoverage(JUNIOR, E18, E18);
+      expect(mzResult.mechanism).to.equal(SHARES_LOCK);
+      expect(jrResult.mechanism).to.equal(SHARES_LOCK);
+      expect(jrResult.feeBps).to.be.gt(mzResult.feeBps);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Fee calculation correct per mechanism
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("fee calculation", () => {
+    it("should charge 0 fee for Senior (always instant)", async () => {
+      const result = await cdo.connect(seniorVault).requestWithdraw.staticCall(
         SENIOR, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
       );
+      expect(result.feeAmount).to.equal(0);
+    });
 
-      // After 7 days cooldown, claim
-      await time.increase(7 * 86400);
+    it("should charge correct Mezz ASSETS_LOCK fee (10 bps)", async () => {
+      // Setup cs ≈ 1.575x
+      await seedTVL(SENIOR, 13_000n * E18);
+      await seedTVL(MEZZ, 1_000n * E18);
+      await cdo.connect(mezzVault).deposit(MEZZ, await mockUSDai.getAddress(), 500n * E18);
+
+      const result = await cdo.connect(mezzVault).requestWithdraw.staticCall(
+        MEZZ, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+      );
+      // 10 bps of 1K = 1
+      expect(result.feeAmount).to.equal(1n * E18);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Claim after cooldown succeeds
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("claimWithdraw — ERC20Cooldown (ASSETS_LOCK)", () => {
+    it("should release tokens to beneficiary after cooldown period", async () => {
+      // Setup Mezz ASSETS_LOCK
+      await seedTVL(SENIOR, 13_000n * E18);
+      await seedTVL(MEZZ, 1_000n * E18);
+      await cdo.connect(mezzVault).deposit(MEZZ, await mockUSDai.getAddress(), 500n * E18);
+
+      // Request withdrawal → ERC20Cooldown
+      await cdo.connect(mezzVault).requestWithdraw(
+        MEZZ, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+      );
+
+      // Wait for cooldown
+      await time.increase(3 * DAY);
 
       const cooldownAddr = await erc20Cooldown.getAddress();
       await expect(cdo.claimWithdraw(1, cooldownAddr)).to.not.be.reverted;
 
       // Beneficiary should have received sUSDai
       expect(await mockSUSDai.balanceOf(beneficiary.address)).to.be.gt(0);
+    });
+
+    it("should revert claim before cooldown expires", async () => {
+      await seedTVL(SENIOR, 13_000n * E18);
+      await seedTVL(MEZZ, 1_000n * E18);
+      await cdo.connect(mezzVault).deposit(MEZZ, await mockUSDai.getAddress(), 500n * E18);
+
+      await cdo.connect(mezzVault).requestWithdraw(
+        MEZZ, 500n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+      );
+
+      // Try to claim immediately (should fail)
+      const cooldownAddr = await erc20Cooldown.getAddress();
+      await expect(cdo.claimWithdraw(1, cooldownAddr)).to.be.reverted;
+    });
+
+    it("should revert if handler is not whitelisted", async () => {
+      await expect(
+        cdo.claimWithdraw(1, beneficiary.address),
+      ).to.be.revertedWithCustomError(cdo, "PrimeVaults__Unauthorized");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Shortfall paused → all withdrawals revert
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe("shortfall paused", () => {
+    it("should revert requestWithdraw for Senior when shortfall paused", async () => {
+      let mockJrVault: any;
+      const TokenFactory = await ethers.getContractFactory("MockBaseAsset");
+      mockJrVault = await TokenFactory.deploy("pvJUNIOR", "pvJR");
+      await cdo.connect(owner).registerTranche(JUNIOR, await mockJrVault.getAddress());
+      await mockJrVault.mint(beneficiary.address, 10_000n * E18);
+
+      await cdo.connect(owner).setJuniorShortfallPausePrice(ethers.MaxUint256);
+      try { await cdo.connect(seniorVault).deposit(SENIOR, await mockUSDai.getAddress(), 100n * E18); } catch {}
+      expect(await cdo.s_shortfallPaused()).to.be.true;
+
+      await expect(
+        cdo.connect(seniorVault).requestWithdraw(SENIOR, 100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0),
+      ).to.be.revertedWithCustomError(cdo, "PrimeVaults__ShortfallPaused");
+    });
+
+    it("should revert requestWithdraw for Mezz when shortfall paused", async () => {
+      let mockJrVault: any;
+      const TokenFactory = await ethers.getContractFactory("MockBaseAsset");
+      mockJrVault = await TokenFactory.deploy("pvJUNIOR", "pvJR");
+      await cdo.connect(owner).registerTranche(JUNIOR, await mockJrVault.getAddress());
+      await mockJrVault.mint(beneficiary.address, 10_000n * E18);
+
+      await seedTVL(MEZZ, 1_000n * E18);
+      await cdo.connect(mezzVault).deposit(MEZZ, await mockUSDai.getAddress(), 500n * E18);
+
+      await cdo.connect(owner).setJuniorShortfallPausePrice(ethers.MaxUint256);
+      try { await cdo.connect(seniorVault).deposit(SENIOR, await mockUSDai.getAddress(), 100n * E18); } catch {}
+      expect(await cdo.s_shortfallPaused()).to.be.true;
+
+      await expect(
+        cdo.connect(mezzVault).requestWithdraw(MEZZ, 100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0),
+      ).to.be.revertedWithCustomError(cdo, "PrimeVaults__ShortfallPaused");
+    });
+
+    it("should revert withdrawJunior when shortfall paused", async () => {
+      let mockJrVault: any;
+      const TokenFactory = await ethers.getContractFactory("MockBaseAsset");
+      mockJrVault = await TokenFactory.deploy("pvJUNIOR", "pvJR");
+      const mockJrVaultAddr = await mockJrVault.getAddress();
+      await cdo.connect(owner).registerTranche(JUNIOR, mockJrVaultAddr);
+      await mockJrVault.mint(beneficiary.address, 10_000n * E18);
+
+      await cdo.connect(owner).setJuniorShortfallPausePrice(ethers.MaxUint256);
+      try { await cdo.connect(seniorVault).deposit(SENIOR, await mockUSDai.getAddress(), 100n * E18); } catch {}
+      expect(await cdo.s_shortfallPaused()).to.be.true;
+
+      // Must call from the registered Junior vault (mockJrVault), not juniorVault signer
+      const jrSigner = await ethers.getImpersonatedSigner(mockJrVaultAddr);
+      await ethers.provider.send("hardhat_setBalance", [mockJrVaultAddr, "0x56BC75E2D63100000"]);
+      await expect(
+        cdo.connect(jrSigner).withdrawJunior(100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0, 0),
+      ).to.be.revertedWithCustomError(cdo, "PrimeVaults__ShortfallPaused");
     });
   });
 
@@ -272,14 +467,27 @@ describe("PrimeCDO — Withdrawals", () => {
   describe("access control", () => {
     it("should revert requestWithdraw from non-tranche caller", async () => {
       await expect(
-        cdo.connect(beneficiary).requestWithdraw(SENIOR, 100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0),
+        cdo.connect(beneficiary).requestWithdraw(
+          SENIOR, 100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0,
+        ),
       ).to.be.revertedWithCustomError(cdo, "PrimeVaults__Unauthorized");
     });
 
-    it("should revert requestWithdraw when shortfall paused", async () => {
-      // Force pause by setting it directly isn't possible, so use the trigger path
-      // Instead, just test the modifier exists by verifying the deposit test worked
-      // For now, test the basic access control
+    it("should revert requestWithdraw with zero amount", async () => {
+      await expect(
+        cdo.connect(seniorVault).requestWithdraw(
+          SENIOR, 0, await mockUSDai.getAddress(), beneficiary.address, 0,
+        ),
+      ).to.be.revertedWithCustomError(cdo, "PrimeVaults__ZeroAmount");
+    });
+
+    it("should revert withdrawJunior from non-Junior vault", async () => {
+      await expect(
+        cdo.connect(seniorVault).withdrawJunior(
+          100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0, 0,
+        ),
+      ).to.be.revertedWithCustomError(cdo, "PrimeVaults__Unauthorized");
     });
   });
+
 });

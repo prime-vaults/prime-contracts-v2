@@ -57,6 +57,7 @@ export interface PrimeCDOInterface extends Interface {
       | "PRECISION"
       | "acceptOwnership"
       | "accounting"
+      | "claimSharesWithdraw"
       | "claimWithdraw"
       | "deposit"
       | "depositJunior"
@@ -68,7 +69,6 @@ export interface PrimeCDOInterface extends Interface {
       | "i_strategy"
       | "i_weth"
       | "i_wethOracle"
-      | "instantWithdraw"
       | "owner"
       | "pendingOwner"
       | "rebalanceBuyWETH"
@@ -83,6 +83,7 @@ export interface PrimeCDOInterface extends Interface {
       | "s_ratioTolerance"
       | "s_shortfallPaused"
       | "s_tranches"
+      | "s_vaultToTranche"
       | "setJuniorShortfallPausePrice"
       | "setMinCoverageForDeposit"
       | "setRatioController"
@@ -111,6 +112,10 @@ export interface PrimeCDOInterface extends Interface {
   encodeFunctionData(
     functionFragment: "accounting",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "claimSharesWithdraw",
+    values: [BigNumberish, AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "claimWithdraw",
@@ -152,10 +157,6 @@ export interface PrimeCDOInterface extends Interface {
   encodeFunctionData(
     functionFragment: "i_wethOracle",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "instantWithdraw",
-    values: [BigNumberish, BigNumberish, AddressLike, AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
@@ -211,6 +212,10 @@ export interface PrimeCDOInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "s_vaultToTranche",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "setJuniorShortfallPausePrice",
     values: [BigNumberish]
   ): string;
@@ -251,6 +256,10 @@ export interface PrimeCDOInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "accounting", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "claimSharesWithdraw",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "claimWithdraw",
     data: BytesLike
   ): Result;
@@ -283,10 +292,6 @@ export interface PrimeCDOInterface extends Interface {
   decodeFunctionResult(functionFragment: "i_weth", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "i_wethOracle",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "instantWithdraw",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
@@ -339,6 +344,10 @@ export interface PrimeCDOInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "s_tranches", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "s_vaultToTranche",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "setJuniorShortfallPausePrice",
     data: BytesLike
@@ -488,6 +497,12 @@ export interface PrimeCDO extends BaseContract {
 
   accounting: TypedContractMethod<[], [string], "view">;
 
+  claimSharesWithdraw: TypedContractMethod<
+    [cooldownId: BigNumberish, outputToken: AddressLike],
+    [bigint],
+    "nonpayable"
+  >;
+
   claimWithdraw: TypedContractMethod<
     [cooldownId: BigNumberish, cooldownHandler: AddressLike],
     [bigint],
@@ -526,17 +541,6 @@ export interface PrimeCDO extends BaseContract {
   i_weth: TypedContractMethod<[], [string], "view">;
 
   i_wethOracle: TypedContractMethod<[], [string], "view">;
-
-  instantWithdraw: TypedContractMethod<
-    [
-      tranche: BigNumberish,
-      baseAmount: BigNumberish,
-      outputToken: AddressLike,
-      beneficiary: AddressLike
-    ],
-    [bigint],
-    "nonpayable"
-  >;
 
   owner: TypedContractMethod<[], [string], "view">;
 
@@ -579,6 +583,8 @@ export interface PrimeCDO extends BaseContract {
   s_shortfallPaused: TypedContractMethod<[], [boolean], "view">;
 
   s_tranches: TypedContractMethod<[arg0: BigNumberish], [string], "view">;
+
+  s_vaultToTranche: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
   setJuniorShortfallPausePrice: TypedContractMethod<
     [price: BigNumberish],
@@ -646,6 +652,13 @@ export interface PrimeCDO extends BaseContract {
     nameOrSignature: "accounting"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "claimSharesWithdraw"
+  ): TypedContractMethod<
+    [cooldownId: BigNumberish, outputToken: AddressLike],
+    [bigint],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "claimWithdraw"
   ): TypedContractMethod<
     [cooldownId: BigNumberish, cooldownHandler: AddressLike],
@@ -695,18 +708,6 @@ export interface PrimeCDO extends BaseContract {
   getFunction(
     nameOrSignature: "i_wethOracle"
   ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "instantWithdraw"
-  ): TypedContractMethod<
-    [
-      tranche: BigNumberish,
-      baseAmount: BigNumberish,
-      outputToken: AddressLike,
-      beneficiary: AddressLike
-    ],
-    [bigint],
-    "nonpayable"
-  >;
   getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
@@ -763,6 +764,9 @@ export interface PrimeCDO extends BaseContract {
   getFunction(
     nameOrSignature: "s_tranches"
   ): TypedContractMethod<[arg0: BigNumberish], [string], "view">;
+  getFunction(
+    nameOrSignature: "s_vaultToTranche"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "setJuniorShortfallPausePrice"
   ): TypedContractMethod<[price: BigNumberish], [void], "nonpayable">;

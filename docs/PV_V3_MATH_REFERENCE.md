@@ -841,39 +841,35 @@ Rebalance sell: permissionless. Rebalance buy: governance only.
 
 ## G1. Withdrawal Policy (per-tranche coverage)
 
-### Coverage metric per tranche
+### Withdrawal mechanism per tranche
 
 ```
-Senior withdrawal: dùng cs = Pool / Sr
-Mezz withdrawal:   dùng cm = (Mz+Jr) / Mz
-Junior withdrawal:  dùng cj = MIN(cs, cm)
+Senior: ALWAYS INSTANT (no fee, no delay)
+
+Mezz (dựa trên cs = Pool / Sr):
+  cs > 160%       → INSTANT
+  140% < cs ≤ 160% → ASSETS_LOCK
+  cs ≤ 140%       → SHARES_LOCK
+  Mezz dùng cs vì: Mezz rút → Senior subordination giảm → cs giảm
+
+Junior (dựa trên cs VÀ cm = (Mz+Jr) / Mz):
+  cs > 160% AND cm > 150%       → INSTANT
+  cs > 140% AND cm > 130%       → ASSETS_LOCK
+  otherwise                      → SHARES_LOCK
+  Junior check CẢ HAI: Jr rút ảnh hưởng cs (Senior) VÀ cm (Mezz)
+  Threshold khác nhau cho cs vs cm per mechanism (governance-configurable)
 ```
 
-### Fee + cooldown ranges
+**Không tranche nào bị hard block withdraw.** Mechanism escalation (INSTANT → ASSETS_LOCK → SHARES_LOCK) kèm fee tăng dần.
+
+### Fee + cooldown per mechanism (governance-configurable)
 
 ```
-Senior (cs):
-  cs > 200%       → INSTANT,      0 bps,    0 days
-  150% < cs ≤ 200% → ASSETS_LOCK,  10 bps,   3 days
-  105% < cs ≤ 150% → SHARES_LOCK,  50 bps,   7 days
-  cs ≤ 105%       → SHARES_LOCK, 100 bps,  14 days
-
-Mezz (cm):
-  cm > 200%       → INSTANT,      0 bps,    0 days
-  150% < cm ≤ 200% → ASSETS_LOCK,  10 bps,   3 days
-  105% < cm ≤ 150% → SHARES_LOCK,  50 bps,   7 days
-  cm ≤ 105%       → SHARES_LOCK, 100 bps,  14 days
-
-Junior (cj = MIN(cs,cm)):
-  cj > 200%       → INSTANT,      0 bps,    0 days
-  150% < cj ≤ 200% → ASSETS_LOCK,  20 bps,   3 days
-  105% < cj ≤ 150% → SHARES_LOCK, 100 bps,   7 days
-  cj ≤ 105%       → SHARES_LOCK, 200 bps,  14 days
+INSTANT:     0 bps, 0 days
+ASSETS_LOCK: configurable (e.g. 10-20 bps, 3 days)
+SHARES_LOCK: configurable (e.g. 50-200 bps, 7-14 days)
+Junior fees higher than Mezz at same mechanism.
 ```
-
-Junior fee cao hơn Sr/Mz ở cùng coverage vì: Jr rút = coverage giảm (harmful), Sr/Mz rút = coverage tăng (beneficial).
-
-**Junior KHÔNG bị hard block.** Fee + cooldown escalation thay vì revert. User luôn có thể rút (trả phí cao + chờ lâu khi stressed).
 
 ### Fee calculation
 
@@ -883,15 +879,17 @@ netAmount = baseAmount - feeAmount
 feeAmount → TVL_reserve
 ```
 
-### Deposit gates (hard block)
+### Deposit gates (check AFTER deposit)
 
 ```
-cs ≤ 105% → Senior deposit BLOCKED
-cm ≤ 105% → Mezz deposit BLOCKED
-Junior deposit → ALWAYS OPEN (tăng cs và cm)
-```
+Deposit Senior decreases cs: cs = 1 + (Mz+Jr)/Sr → Sr↑ → cs↓
+Deposit Mezz decreases cm:   cm = 1 + Jr/Mz      → Mz↑ → cm↓
 
-Block deposit OK: user chưa bỏ tiền vào → không trap funds.
+Check AFTER recording deposit (not before):
+  cs < 105% after deposit → revert entire tx (Sr deposit blocked)
+  cm < 105% after deposit → revert entire tx (Mz deposit blocked)
+  Junior deposit → ALWAYS OPEN (tăng cs và cm)
+```
 
 ---
 
