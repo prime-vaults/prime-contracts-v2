@@ -12,4 +12,5 @@ export { IRatioController__factory } from "./IRatioController__factory";
 export { IStakedUSDai__factory } from "./IStakedUSDai__factory";
 export { IStrategy__factory } from "./IStrategy__factory";
 export { ISwapFacility__factory } from "./ISwapFacility__factory";
+export { ISwapRouter__factory } from "./ISwapRouter__factory";
 export { IWETHPriceOracle__factory } from "./IWETHPriceOracle__factory";

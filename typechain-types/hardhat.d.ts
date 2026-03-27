@@ -174,6 +174,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ISwapFacility__factory>;
     getContractFactory(
+      name: "ISwapRouter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ISwapRouter__factory>;
+    getContractFactory(
       name: "IWETHPriceOracle",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IWETHPriceOracle__factory>;
@@ -185,10 +189,6 @@ declare module "hardhat/types/runtime" {
       name: "IAaveV3Pool",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IAaveV3Pool__factory>;
-    getContractFactory(
-      name: "ISwapRouter",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ISwapRouter__factory>;
     getContractFactory(
       name: "SwapFacility",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -499,6 +499,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ISwapFacility>;
     getContractAt(
+      name: "ISwapRouter",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ISwapRouter>;
+    getContractAt(
       name: "IWETHPriceOracle",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -513,11 +518,6 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IAaveV3Pool>;
-    getContractAt(
-      name: "ISwapRouter",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.ISwapRouter>;
     getContractAt(
       name: "SwapFacility",
       address: string | ethers.Addressable,
@@ -815,6 +815,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ISwapFacility>;
     deployContract(
+      name: "ISwapRouter",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ISwapRouter>;
+    deployContract(
       name: "IWETHPriceOracle",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IWETHPriceOracle>;
@@ -826,10 +830,6 @@ declare module "hardhat/types/runtime" {
       name: "IAaveV3Pool",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IAaveV3Pool>;
-    deployContract(
-      name: "ISwapRouter",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ISwapRouter>;
     deployContract(
       name: "SwapFacility",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -1140,6 +1140,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ISwapFacility>;
     deployContract(
+      name: "ISwapRouter",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ISwapRouter>;
+    deployContract(
       name: "IWETHPriceOracle",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -1154,11 +1159,6 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IAaveV3Pool>;
-    deployContract(
-      name: "ISwapRouter",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ISwapRouter>;
     deployContract(
       name: "SwapFacility",
       args: any[],

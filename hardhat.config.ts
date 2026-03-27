@@ -15,7 +15,7 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      // Fork Arbitrum for integration tests:
+      // Fork Arbitrum for integration tests / deploy verification:
       // ARB_RPC_URL=<url> npx hardhat test test/integration/
       ...(process.env.ARB_RPC_URL
         ? {
@@ -24,6 +24,11 @@ const config: HardhatUserConfig = {
             },
           }
         : {}),
+    },
+    arbitrum: {
+      url: process.env.ARB_RPC_URL || "",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 42161,
     },
   },
   gasReporter: {

@@ -13,4 +13,5 @@ export type { IRatioController } from "./IRatioController";
 export type { IStakedUSDai } from "./IStakedUSDai";
 export type { IStrategy } from "./IStrategy";
 export type { ISwapFacility } from "./ISwapFacility";
+export type { ISwapRouter } from "./ISwapRouter";
 export type { IWETHPriceOracle } from "./IWETHPriceOracle";

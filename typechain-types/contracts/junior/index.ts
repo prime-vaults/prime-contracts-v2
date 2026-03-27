@@ -3,7 +3,6 @@
 /* eslint-disable */
 import type * as aaveWethAdapterSol from "./AaveWETHAdapter.sol";
 export type { aaveWethAdapterSol };
-import type * as swapFacilitySol from "./SwapFacility.sol";
-export type { swapFacilitySol };
 import type * as wethPriceOracleSol from "./WETHPriceOracle.sol";
 export type { wethPriceOracleSol };
+export type { SwapFacility } from "./SwapFacility";

@@ -2,5 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as aaveWethAdapterSol from "./AaveWETHAdapter.sol";
-export * as swapFacilitySol from "./SwapFacility.sol";
 export * as wethPriceOracleSol from "./WETHPriceOracle.sol";
+export { SwapFacility__factory } from "./SwapFacility__factory";
