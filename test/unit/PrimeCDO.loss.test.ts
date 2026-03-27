@@ -33,6 +33,7 @@ describe("PrimeCDO — Loss Coverage & Shortfall", () => {
     await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
     const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
     await accounting.connect(cdoSigner).recordDeposit(tranche, amount);
+    await mockUSDai.mint(await strategy.getAddress(), amount);
   }
 
   async function seedWETHInAave(amount: bigint) {
@@ -224,6 +225,13 @@ describe("PrimeCDO — Loss Coverage & Shortfall", () => {
   describe("shortfall auto-pause", () => {
     let mockJrVault: any;
 
+    async function drainStrategy(amount: bigint) {
+      const stratAddr = await strategy.getAddress();
+      await ethers.provider.send("hardhat_setBalance", [stratAddr, "0x56BC75E2D63100000"]);
+      const stratSigner = await ethers.getImpersonatedSigner(stratAddr);
+      await mockUSDai.connect(stratSigner).transfer(owner.address, amount);
+    }
+
     beforeEach(async () => {
       const TokenFactory = await ethers.getContractFactory("MockBaseAsset");
       mockJrVault = await TokenFactory.deploy("pvJUNIOR", "pvJR");
@@ -235,14 +243,17 @@ describe("PrimeCDO — Loss Coverage & Shortfall", () => {
       await seedTVL(JUNIOR, 10_000n * E18);
       await cdo.connect(owner).setJuniorShortfallPausePrice(9n * E18 / 10n); // 0.9e18
 
-      // Simulate 20% loss: Jr TVL drops from 10K to 8K
-      // pricePerShare = 8K / 10K = 0.8 < 0.9 threshold
+      // Simulate 20% loss: Jr TVL drops from 10K to 8K AND reduce strategy assets
       const cdoAddr = await cdo.getAddress();
       await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
       const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
       await accounting.connect(cdoSigner).recordWithdraw(JUNIOR, 2_000n * E18);
+      // Also remove USDai from strategy so updateTVL sees the loss
+      const stratAddr = await strategy.getAddress();
+      await ethers.provider.send("hardhat_setBalance", [stratAddr, "0x56BC75E2D63100000"]);
+      const stratSigner = await ethers.getImpersonatedSigner(stratAddr);
+      await mockUSDai.connect(stratSigner).transfer(owner.address, 2_000n * E18);
 
-      // Trigger shortfall check via a seed deposit
       await seedTVL(SENIOR, 1_000n * E18);
       await mockUSDai.mint(seniorVault.address, 100_000n * E18);
       await mockUSDai.connect(seniorVault).approve(await cdo.getAddress(), ethers.MaxUint256);
@@ -262,6 +273,7 @@ describe("PrimeCDO — Loss Coverage & Shortfall", () => {
       await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
       const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
       await accounting.connect(cdoSigner).recordWithdraw(JUNIOR, 2_000n * E18);
+      await drainStrategy(2_000n * E18);
 
       await mockUSDai.mint(seniorVault.address, 100_000n * E18);
       await mockUSDai.connect(seniorVault).approve(await cdo.getAddress(), ethers.MaxUint256);
@@ -282,6 +294,7 @@ describe("PrimeCDO — Loss Coverage & Shortfall", () => {
       await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
       const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
       await accounting.connect(cdoSigner).recordWithdraw(JUNIOR, 500n * E18);
+      await drainStrategy(500n * E18);
 
       await mockUSDai.mint(seniorVault.address, 100_000n * E18);
       await mockUSDai.connect(seniorVault).approve(await cdo.getAddress(), ethers.MaxUint256);
@@ -302,6 +315,7 @@ describe("PrimeCDO — Loss Coverage & Shortfall", () => {
       await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
       const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
       await accounting.connect(cdoSigner).recordWithdraw(JUNIOR, 2_000n * E18);
+      await drainStrategy(2_000n * E18);
 
       await mockUSDai.mint(seniorVault.address, 100_000n * E18);
       await mockUSDai.connect(seniorVault).approve(await cdo.getAddress(), ethers.MaxUint256);
@@ -325,6 +339,7 @@ describe("PrimeCDO — Loss Coverage & Shortfall", () => {
       await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
       const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
       await accounting.connect(cdoSigner).recordWithdraw(JUNIOR, 2_000n * E18);
+      await drainStrategy(2_000n * E18);
 
       await mockUSDai.mint(seniorVault.address, 100_000n * E18);
       await mockUSDai.connect(seniorVault).approve(await cdo.getAddress(), ethers.MaxUint256);

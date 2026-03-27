@@ -11,6 +11,7 @@ import {IAccounting} from "../interfaces/IAccounting.sol";
 import {TrancheId} from "../interfaces/IPrimeCDO.sol";
 import {IAprPairFeed} from "../interfaces/IAprPairFeed.sol";
 import {RiskParams} from "../governance/RiskParams.sol";
+import {FixedPointMath} from "../libraries/FixedPointMath.sol";
 
 /**
  * @title Accounting
@@ -21,11 +22,15 @@ import {RiskParams} from "../governance/RiskParams.sol";
  *      See MATH_REFERENCE §C1-C4 for gain splitting, §D1-D4 for loss waterfall.
  */
 contract Accounting is IAccounting {
+    using FixedPointMath for uint256;
+
     // ═══════════════════════════════════════════════════════════════════
     //  CONSTANTS
     // ═══════════════════════════════════════════════════════════════════
 
     uint256 public constant PRECISION = 1e18;
+    uint256 private constant YEAR = 365 days;
+    uint256 private constant APR_12DEC_TO_18DEC = 1e6; // int64×12dec → uint256×18dec
 
     // ═══════════════════════════════════════════════════════════════════
     //  IMMUTABLES
@@ -45,6 +50,7 @@ contract Accounting is IAccounting {
     uint256 public s_reserveTVL;
     uint256 public s_lastUpdateTimestamp;
     uint256 public s_srtTargetIndex;
+    uint256 public s_mzTargetIndex;
 
     address public s_primeCDO;
 
@@ -57,6 +63,8 @@ contract Accounting is IAccounting {
     event WithdrawRecorded(TrancheId indexed tranche, uint256 amount);
     event FeeRecorded(TrancheId indexed tranche, uint256 feeAmount);
     event JuniorWethTVLSet(uint256 wethValueUSD);
+    event GainSplit(uint256 netGain, uint256 seniorGain, uint256 mezzGain, uint256 juniorGain, uint256 reserveCut);
+    event LossApplied(uint256 loss, uint256 jrAbsorbed, uint256 mzAbsorbed, uint256 srAbsorbed);
 
     // ═══════════════════════════════════════════════════════════════════
     //  ERRORS
@@ -84,6 +92,7 @@ contract Accounting is IAccounting {
         i_aprFeed = IAprPairFeed(aprFeed_);
         i_riskParams = RiskParams(riskParams_);
         s_srtTargetIndex = PRECISION; // init: 1e18
+        s_mzTargetIndex = PRECISION; // init: 1e18
         s_lastUpdateTimestamp = block.timestamp;
     }
 
@@ -103,12 +112,42 @@ contract Accounting is IAccounting {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  MUTATIVE — updateTVL (Part 2, not yet implemented)
+    //  MUTATIVE — updateTVL (gain splitting + loss waterfall)
     // ═══════════════════════════════════════════════════════════════════
 
-    /** @dev Placeholder — implemented in Part 2 (gain splitting + loss waterfall). */
-    function updateTVL(uint256, uint256) external override onlyCDO {
-        // TODO: implement in Part 2
+    /**
+     * @notice Update TVLs: detect gain/loss from strategy, split gains or apply loss waterfall.
+     * @dev See MATH_REFERENCE §C1-C5 for gain splitting, §D4 for loss waterfall.
+     *      Called by PrimeCDO at the start of every deposit/withdraw/rebalance.
+     * @param currentStrategyTVL Strategy.totalAssets() — current base value in strategy
+     * @param currentWethValueUSD AaveWETHAdapter.totalAssetsUSD() — WETH buffer in USD
+     */
+    function updateTVL(uint256 currentStrategyTVL, uint256 currentWethValueUSD) external override onlyCDO {
+        // Update WETH TVL (independent of gain splitting)
+        s_juniorWethTVL = currentWethValueUSD;
+
+        // C1: Strategy gain = current - previous tracked strategy TVL
+        uint256 prevStrategyTVL = s_seniorTVL + s_mezzTVL + s_juniorBaseTVL + s_reserveTVL;
+
+        if (prevStrategyTVL == 0) {
+            s_lastUpdateTimestamp = block.timestamp;
+            return;
+        }
+
+        uint256 deltaT = block.timestamp - s_lastUpdateTimestamp;
+        if (deltaT == 0) return;
+
+        if (currentStrategyTVL >= prevStrategyTVL) {
+            // Gain path (C2-C5)
+            uint256 strategyGain = currentStrategyTVL - prevStrategyTVL;
+            _splitGain(strategyGain, deltaT);
+        } else {
+            // Loss path (D4)
+            uint256 loss = prevStrategyTVL - currentStrategyTVL;
+            _applyLossWaterfall(loss);
+        }
+
+        s_lastUpdateTimestamp = block.timestamp;
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -174,14 +213,216 @@ contract Accounting is IAccounting {
         jr = s_juniorBaseTVL + s_juniorWethTVL;
     }
 
-    /** @dev Placeholder — implemented in Part 2 (_computeSeniorAPR). */
+    /**
+     * @notice Compute current Senior APR using APR feed + risk premiums.
+     * @dev APR_sr = MAX(aprTarget, aprBase × (1 - RP1)). See MATH_REFERENCE §E5.
+     */
     function getSeniorAPR() external view override returns (uint256) {
-        // TODO: implement in Part 2
-        return 0;
+        return _computeSeniorAPR();
+    }
+
+    /**
+     * @notice Compute current Mezzanine APR using APR feed + risk premiums.
+     * @dev APR_mz = aprBase × (1 + RP1 × subLeverage) × (1 - RP2). See MATH_REFERENCE §E6.
+     */
+    function getMezzAPR() external view returns (uint256) {
+        return _computeMezzAPR();
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  INTERNAL
+    //  INTERNAL — Gain Splitting (§C2-C5)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @dev Split positive strategy gain across tranches. See MATH_REFERENCE §C2-C5.
+     *      Priority: reserve cut → Senior target → Mezz target → Junior residual.
+     */
+    function _splitGain(uint256 strategyGain, uint256 deltaT) internal {
+        // C2: Reserve cut (only on positive gains)
+        uint256 reserveBps = i_riskParams.s_reserveBps();
+        uint256 reserveCut = (strategyGain * reserveBps) / 10_000;
+        uint256 netGain = strategyGain - reserveCut;
+        s_reserveTVL += reserveCut;
+
+        // C3: Senior target gain (compound index)
+        uint256 aprSr = _computeSeniorAPR();
+        uint256 seniorGainTarget = (s_seniorTVL * aprSr * deltaT) / (YEAR * PRECISION);
+
+        // Update Senior target index
+        if (s_seniorTVL > 0 && aprSr > 0) {
+            uint256 interestFactor = (aprSr * deltaT) / YEAR;
+            s_srtTargetIndex = (s_srtTargetIndex * (PRECISION + interestFactor)) / PRECISION;
+        }
+
+        // C4: Mezzanine target gain (compound index)
+        uint256 aprMz = _computeMezzAPR();
+        uint256 mezzGainTarget = (s_mezzTVL * aprMz * deltaT) / (YEAR * PRECISION);
+
+        // Update Mezz target index
+        if (s_mezzTVL > 0 && aprMz > 0) {
+            uint256 interestFactor = (aprMz * deltaT) / YEAR;
+            s_mzTargetIndex = (s_mzTargetIndex * (PRECISION + interestFactor)) / PRECISION;
+        }
+
+        // C5: Distribute gain (4 cases)
+        uint256 seniorGain;
+        uint256 mezzGain;
+        uint256 juniorGain;
+
+        uint256 totalTarget = seniorGainTarget + mezzGainTarget;
+
+        if (netGain >= totalTarget) {
+            // CASE A: yield sufficient for all
+            seniorGain = seniorGainTarget;
+            mezzGain = mezzGainTarget;
+            juniorGain = netGain - totalTarget;
+        } else if (netGain >= seniorGainTarget) {
+            // CASE B: yield sufficient for Senior, partial Mezz
+            seniorGain = seniorGainTarget;
+            mezzGain = netGain - seniorGainTarget;
+            juniorGain = 0;
+        } else {
+            // CASE C: yield insufficient even for Senior
+            seniorGain = netGain;
+            mezzGain = 0;
+            juniorGain = 0;
+        }
+
+        s_seniorTVL += seniorGain;
+        s_mezzTVL += mezzGain;
+        s_juniorBaseTVL += juniorGain;
+
+        emit GainSplit(netGain, seniorGain, mezzGain, juniorGain, reserveCut);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  INTERNAL — Loss Waterfall (§D4)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @dev Apply loss waterfall: Junior base → Mezzanine → Senior.
+     *      Layer 0 (WETH) is handled by PrimeCDO.executeWETHCoverage() separately.
+     *      See MATH_REFERENCE §D4.
+     */
+    function _applyLossWaterfall(uint256 loss) internal {
+        uint256 remaining = loss;
+
+        // Layer 1: Junior base (first loss)
+        uint256 jrAbsorbed = remaining > s_juniorBaseTVL ? s_juniorBaseTVL : remaining;
+        s_juniorBaseTVL -= jrAbsorbed;
+        remaining -= jrAbsorbed;
+
+        // Layer 2: Mezzanine
+        uint256 mzAbsorbed = remaining > s_mezzTVL ? s_mezzTVL : remaining;
+        s_mezzTVL -= mzAbsorbed;
+        remaining -= mzAbsorbed;
+
+        // Layer 3: Senior (last resort)
+        uint256 srAbsorbed = remaining > s_seniorTVL ? s_seniorTVL : remaining;
+        s_seniorTVL -= srAbsorbed;
+
+        emit LossApplied(loss, jrAbsorbed, mzAbsorbed, srAbsorbed);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  INTERNAL — APR Computation (§E3-E6)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @dev Convert int64 × 12 decimals APR to uint256 × 18 decimals. Negative → 0.
+     */
+    function _aprTo18Dec(int64 apr12) internal pure returns (uint256) {
+        if (apr12 <= 0) return 0;
+        return uint256(uint64(apr12)) * APR_12DEC_TO_18DEC;
+    }
+
+    /**
+     * @dev Compute RP1 = x + y × ratio_sr^k. See MATH_REFERENCE §E3.
+     *      ratio_sr = TVL_sr / (TVL_sr + TVL_mz + TVL_jr)
+     */
+    function _computeRP1() internal view returns (uint256) {
+        uint256 pool = s_seniorTVL + s_mezzTVL + s_juniorBaseTVL + s_juniorWethTVL;
+        if (pool == 0 || s_seniorTVL == 0) return 0;
+
+        uint256 ratioSr = s_seniorTVL.fpDiv(pool);
+
+        (uint256 x, uint256 y, uint256 k) = i_riskParams.s_seniorPremium();
+        uint256 rPow = ratioSr.fpow(k);
+        return x + y.fpMul(rPow);
+    }
+
+    /**
+     * @dev Compute RP2 = x + y × mezzLeverage^k. See MATH_REFERENCE §E4.
+     *      mezzLeverage = TVL_mz / (TVL_jr + TVL_mz)
+     */
+    function _computeRP2() internal view returns (uint256) {
+        uint256 jr = s_juniorBaseTVL + s_juniorWethTVL;
+        uint256 mzPlusJr = s_mezzTVL + jr;
+        if (mzPlusJr == 0) return 0;
+
+        uint256 mezzLeverage = s_mezzTVL.fpDiv(mzPlusJr);
+
+        (uint256 x, uint256 y, uint256 k) = i_riskParams.s_juniorPremium();
+        uint256 rPow = mezzLeverage.fpow(k);
+        return x + y.fpMul(rPow);
+    }
+
+    /**
+     * @dev Read APR pair from feed. Returns (0, 0) if feed is not a contract or call fails.
+     */
+    function _getAprPair() internal view returns (uint256 aprTarget, uint256 aprBase) {
+        address feed = address(i_aprFeed);
+        if (feed == address(0) || feed.code.length == 0) return (0, 0);
+        try i_aprFeed.latestRoundData() returns (IAprPairFeed.TRound memory round) {
+            aprTarget = _aprTo18Dec(round.aprTarget);
+            aprBase = _aprTo18Dec(round.aprBase);
+        } catch {
+            return (0, 0);
+        }
+    }
+
+    /**
+     * @dev APR_sr = MAX(aprTarget, aprBase × (1 - RP1)). See MATH_REFERENCE §E5.
+     */
+    function _computeSeniorAPR() internal view returns (uint256) {
+        (uint256 aprTarget, uint256 aprBase) = _getAprPair();
+
+        uint256 rp1 = _computeRP1();
+
+        uint256 aprSrV2 = rp1 < PRECISION ? aprBase.fpMul(PRECISION - rp1) : 0;
+
+        return aprSrV2 > aprTarget ? aprSrV2 : aprTarget;
+    }
+
+    /**
+     * @dev APR_mz = aprBase × (1 + RP1 × subLeverage) × (1 - RP2). See MATH_REFERENCE §E6.
+     *      subLeverage = TVL_sr / (TVL_mz + TVL_jr)
+     */
+    function _computeMezzAPR() internal view returns (uint256) {
+        (, uint256 aprBase) = _getAprPair();
+        if (aprBase == 0) return 0;
+
+        uint256 jr = s_juniorBaseTVL + s_juniorWethTVL;
+        uint256 mzPlusJr = s_mezzTVL + jr;
+        if (mzPlusJr == 0) return 0;
+
+        // subLeverage = TVL_sr / (TVL_mz + TVL_jr)
+        uint256 subLeverage = s_seniorTVL > 0 ? s_seniorTVL.fpDiv(mzPlusJr) : 0;
+
+        uint256 rp1 = _computeRP1();
+        uint256 rp2 = _computeRP2();
+
+        // gross = aprBase × (1 + RP1 × subLeverage)
+        uint256 rp1Bonus = rp1.fpMul(subLeverage);
+        uint256 gross = aprBase.fpMul(PRECISION + rp1Bonus);
+
+        // net = gross × (1 - RP2)
+        if (rp2 >= PRECISION) return 0;
+        return gross.fpMul(PRECISION - rp2);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  INTERNAL — TVL helpers
     // ═══════════════════════════════════════════════════════════════════
 
     function _addToTranche(TrancheId id, uint256 amount) internal {

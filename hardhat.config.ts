@@ -15,10 +15,15 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      // Fork mainnet for integration tests
-      // forking: {
-      //   url: process.env.MAINNET_RPC_URL || "",
-      // },
+      // Fork Arbitrum for integration tests:
+      // ARB_RPC_URL=<url> npx hardhat test test/integration/
+      ...(process.env.ARB_RPC_URL
+        ? {
+            forking: {
+              url: process.env.ARB_RPC_URL,
+            },
+          }
+        : {}),
     },
   },
   gasReporter: {

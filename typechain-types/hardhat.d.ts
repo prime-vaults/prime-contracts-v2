@@ -266,6 +266,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockWETH__factory>;
     getContractFactory(
+      name: "MockAprFeed",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockAprFeed__factory>;
+    getContractFactory(
       name: "MockChainlinkFeed",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockChainlinkFeed__factory>;
@@ -610,6 +614,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.MockWETH>;
     getContractAt(
+      name: "MockAprFeed",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockAprFeed>;
+    getContractAt(
       name: "MockChainlinkFeed",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -898,6 +907,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockWETH>;
     deployContract(
+      name: "MockAprFeed",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockAprFeed>;
+    deployContract(
       name: "MockChainlinkFeed",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockChainlinkFeed>;
@@ -1241,6 +1254,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockWETH>;
+    deployContract(
+      name: "MockAprFeed",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockAprFeed>;
     deployContract(
       name: "MockChainlinkFeed",
       args: any[],

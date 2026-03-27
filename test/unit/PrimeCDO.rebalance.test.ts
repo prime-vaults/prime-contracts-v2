@@ -33,6 +33,8 @@ describe("PrimeCDO — Rebalance (Asymmetric)", () => {
     await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
     const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
     await accounting.connect(cdoSigner).recordDeposit(tranche, amount);
+    // Match strategy assets so updateTVL doesn't see phantom gain/loss
+    await mockUSDai.mint(await strategy.getAddress(), amount);
   }
 
   async function seedWETHInAave(amount: bigint) {
@@ -114,9 +116,6 @@ describe("PrimeCDO — Rebalance (Asymmetric)", () => {
     await cdo.connect(owner).registerTranche(MEZZ, mezzVault.address);
     await cdo.connect(owner).registerTranche(JUNIOR, juniorVault.address);
     await cdo.connect(owner).setJuniorShortfallPausePrice(0);
-
-    // Fund strategy with base asset for withdrawals
-    await mockUSDai.mint(await strategy.getAddress(), 10_000_000n * E18);
   });
 
   // ═══════════════════════════════════════════════════════════════════

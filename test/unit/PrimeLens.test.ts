@@ -37,6 +37,7 @@ describe("PrimeLens — Read-only aggregator", () => {
     await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
     const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
     await accounting.connect(cdoSigner).recordDeposit(tranche, amount);
+    await mockUSDai.mint(await strategy.getAddress(), amount);
   }
 
   async function seedWETHInAave(amount: bigint) {
@@ -130,9 +131,6 @@ describe("PrimeLens — Read-only aggregator", () => {
     await cdo.connect(owner).setJuniorShortfallPausePrice(0);
     await erc20Cooldown.connect(owner).setAuthorized(await cdo.getAddress(), true);
     await sharesCooldown.connect(owner).setAuthorized(await cdo.getAddress(), true);
-
-    // --- Fund strategy ---
-    await mockUSDai.mint(await strategy.getAddress(), 10_000_000n * E18);
 
     // --- Deploy PrimeLens ---
     const LensFactory = await ethers.getContractFactory("PrimeLens");

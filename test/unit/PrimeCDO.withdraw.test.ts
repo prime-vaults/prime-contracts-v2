@@ -40,6 +40,11 @@ describe("PrimeCDO — Withdrawals", () => {
     await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
     const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
     await accounting.connect(cdoSigner).recordDeposit(tranche, amount);
+    // Match strategy assets so updateTVL doesn't see phantom gain/loss
+    const stratAddr = await strategy.getAddress();
+    await mockUSDai.mint(owner.address, amount);
+    await mockUSDai.connect(owner).approve(await mockSUSDai.getAddress(), amount);
+    await mockSUSDai.connect(owner).deposit(amount, stratAddr);
   }
 
   beforeEach(async () => {

@@ -37,6 +37,7 @@ describe("TrancheVault — ERC-4626", () => {
     await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
     const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
     await accounting.connect(cdoSigner).recordDeposit(tranche, amount);
+    await mockUSDai.mint(await strategy.getAddress(), amount);
   }
 
   async function seedWETHInAave(amount: bigint) {
@@ -132,9 +133,6 @@ describe("TrancheVault — ERC-4626", () => {
     // --- Authorize CDO in cooldown contracts ---
     await erc20Cooldown.connect(owner).setAuthorized(await cdo.getAddress(), true);
     await sharesCooldown.connect(owner).setAuthorized(await cdo.getAddress(), true);
-
-    // --- Fund strategy for withdrawals ---
-    await mockUSDai.mint(await strategy.getAddress(), 10_000_000n * E18);
 
     // --- Fund users ---
     await mockUSDai.mint(alice.address, 1_000_000n * E18);

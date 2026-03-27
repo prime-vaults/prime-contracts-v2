@@ -31,6 +31,11 @@ describe("PrimeCDO — Deposits (per-tranche coverage)", () => {
     await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
     const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
     await accounting.connect(cdoSigner).recordDeposit(tranche, amount);
+    // Match strategy assets so updateTVL doesn't see phantom gain/loss
+    const stratAddr = await strategy.getAddress();
+    await mockUSDai.mint(owner.address, amount);
+    await mockUSDai.connect(owner).approve(await mockSUSDai.getAddress(), amount);
+    await mockSUSDai.connect(owner).deposit(amount, stratAddr);
   }
 
   beforeEach(async () => {
@@ -282,11 +287,16 @@ describe("PrimeCDO — Deposits (per-tranche coverage)", () => {
       await seedTVL(SENIOR, 1_000n * E18);
       await cdo.connect(owner).setJuniorShortfallPausePrice(9n * E18 / 10n);
 
-      // Simulate 20% loss: Jr TVL 10K → 8K → pricePerShare = 0.8 < 0.9
+      // Simulate 20% loss: Jr TVL 10K → 8K AND reduce strategy assets to match
       const cdoAddr = await cdo.getAddress();
       await ethers.provider.send("hardhat_setBalance", [cdoAddr, "0x56BC75E2D63100000"]);
       const cdoSigner = await ethers.getImpersonatedSigner(cdoAddr);
       await accounting.connect(cdoSigner).recordWithdraw(JUNIOR, 2_000n * E18);
+      // Burn matching sUSDai from strategy so updateTVL sees the loss
+      const stratAddr = await strategy.getAddress();
+      const stratSigner = await ethers.getImpersonatedSigner(stratAddr);
+      await ethers.provider.send("hardhat_setBalance", [stratAddr, "0x56BC75E2D63100000"]);
+      await mockSUSDai.connect(stratSigner).transfer(owner.address, 2_000n * E18);
 
       try { await cdo.connect(seniorVault).deposit(SENIOR, await mockUSDai.getAddress(), 100n * E18); } catch {}
       expect(await cdo.s_shortfallPaused()).to.be.true;

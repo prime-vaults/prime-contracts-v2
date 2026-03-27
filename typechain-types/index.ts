@@ -130,6 +130,8 @@ export type { MockAWETH } from "./contracts/test/mocks/MockAavePoolForAdapter.so
 export { MockAWETH__factory } from "./factories/contracts/test/mocks/MockAavePoolForAdapter.sol/MockAWETH__factory";
 export type { MockWETH } from "./contracts/test/mocks/MockAavePoolForAdapter.sol/MockWETH";
 export { MockWETH__factory } from "./factories/contracts/test/mocks/MockAavePoolForAdapter.sol/MockWETH__factory";
+export type { MockAprFeed } from "./contracts/test/mocks/MockAprFeed";
+export { MockAprFeed__factory } from "./factories/contracts/test/mocks/MockAprFeed__factory";
 export type { MockChainlinkFeed } from "./contracts/test/mocks/MockChainlinkFeed";
 export { MockChainlinkFeed__factory } from "./factories/contracts/test/mocks/MockChainlinkFeed__factory";
 export type { MockERC4626 } from "./contracts/test/mocks/MockERC4626";

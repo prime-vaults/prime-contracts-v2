@@ -31,6 +31,7 @@ export interface AccountingInterface extends Interface {
       | "getJuniorBaseTVL"
       | "getJuniorTVL"
       | "getJuniorWethTVL"
+      | "getMezzAPR"
       | "getSeniorAPR"
       | "getTrancheTVL"
       | "i_aprFeed"
@@ -42,6 +43,7 @@ export interface AccountingInterface extends Interface {
       | "s_juniorWethTVL"
       | "s_lastUpdateTimestamp"
       | "s_mezzTVL"
+      | "s_mzTargetIndex"
       | "s_primeCDO"
       | "s_reserveTVL"
       | "s_seniorTVL"
@@ -56,7 +58,9 @@ export interface AccountingInterface extends Interface {
       | "CDOSet"
       | "DepositRecorded"
       | "FeeRecorded"
+      | "GainSplit"
       | "JuniorWethTVLSet"
+      | "LossApplied"
       | "WithdrawRecorded"
   ): EventFragment;
 
@@ -75,6 +79,10 @@ export interface AccountingInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "getJuniorWethTVL",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getMezzAPR",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -116,6 +124,10 @@ export interface AccountingInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "s_mezzTVL", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "s_mzTargetIndex",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "s_primeCDO",
     values?: undefined
   ): string;
@@ -155,6 +167,7 @@ export interface AccountingInterface extends Interface {
     functionFragment: "getJuniorWethTVL",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "getMezzAPR", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getSeniorAPR",
     data: BytesLike
@@ -190,6 +203,10 @@ export interface AccountingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "s_mezzTVL", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "s_mzTargetIndex",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "s_primeCDO", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "s_reserveTVL",
@@ -249,11 +266,64 @@ export namespace FeeRecordedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace GainSplitEvent {
+  export type InputTuple = [
+    netGain: BigNumberish,
+    seniorGain: BigNumberish,
+    mezzGain: BigNumberish,
+    juniorGain: BigNumberish,
+    reserveCut: BigNumberish
+  ];
+  export type OutputTuple = [
+    netGain: bigint,
+    seniorGain: bigint,
+    mezzGain: bigint,
+    juniorGain: bigint,
+    reserveCut: bigint
+  ];
+  export interface OutputObject {
+    netGain: bigint;
+    seniorGain: bigint;
+    mezzGain: bigint;
+    juniorGain: bigint;
+    reserveCut: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace JuniorWethTVLSetEvent {
   export type InputTuple = [wethValueUSD: BigNumberish];
   export type OutputTuple = [wethValueUSD: bigint];
   export interface OutputObject {
     wethValueUSD: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace LossAppliedEvent {
+  export type InputTuple = [
+    loss: BigNumberish,
+    jrAbsorbed: BigNumberish,
+    mzAbsorbed: BigNumberish,
+    srAbsorbed: BigNumberish
+  ];
+  export type OutputTuple = [
+    loss: bigint,
+    jrAbsorbed: bigint,
+    mzAbsorbed: bigint,
+    srAbsorbed: bigint
+  ];
+  export interface OutputObject {
+    loss: bigint;
+    jrAbsorbed: bigint;
+    mzAbsorbed: bigint;
+    srAbsorbed: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -331,6 +401,8 @@ export interface Accounting extends BaseContract {
 
   getJuniorWethTVL: TypedContractMethod<[], [bigint], "view">;
 
+  getMezzAPR: TypedContractMethod<[], [bigint], "view">;
+
   getSeniorAPR: TypedContractMethod<[], [bigint], "view">;
 
   getTrancheTVL: TypedContractMethod<[id: BigNumberish], [bigint], "view">;
@@ -365,6 +437,8 @@ export interface Accounting extends BaseContract {
 
   s_mezzTVL: TypedContractMethod<[], [bigint], "view">;
 
+  s_mzTargetIndex: TypedContractMethod<[], [bigint], "view">;
+
   s_primeCDO: TypedContractMethod<[], [string], "view">;
 
   s_reserveTVL: TypedContractMethod<[], [bigint], "view">;
@@ -382,7 +456,7 @@ export interface Accounting extends BaseContract {
   >;
 
   updateTVL: TypedContractMethod<
-    [arg0: BigNumberish, arg1: BigNumberish],
+    [currentStrategyTVL: BigNumberish, currentWethValueUSD: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -409,6 +483,9 @@ export interface Accounting extends BaseContract {
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "getJuniorWethTVL"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getMezzAPR"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "getSeniorAPR"
@@ -456,6 +533,9 @@ export interface Accounting extends BaseContract {
     nameOrSignature: "s_mezzTVL"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "s_mzTargetIndex"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "s_primeCDO"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -476,7 +556,7 @@ export interface Accounting extends BaseContract {
   getFunction(
     nameOrSignature: "updateTVL"
   ): TypedContractMethod<
-    [arg0: BigNumberish, arg1: BigNumberish],
+    [currentStrategyTVL: BigNumberish, currentWethValueUSD: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -503,11 +583,25 @@ export interface Accounting extends BaseContract {
     FeeRecordedEvent.OutputObject
   >;
   getEvent(
+    key: "GainSplit"
+  ): TypedContractEvent<
+    GainSplitEvent.InputTuple,
+    GainSplitEvent.OutputTuple,
+    GainSplitEvent.OutputObject
+  >;
+  getEvent(
     key: "JuniorWethTVLSet"
   ): TypedContractEvent<
     JuniorWethTVLSetEvent.InputTuple,
     JuniorWethTVLSetEvent.OutputTuple,
     JuniorWethTVLSetEvent.OutputObject
+  >;
+  getEvent(
+    key: "LossApplied"
+  ): TypedContractEvent<
+    LossAppliedEvent.InputTuple,
+    LossAppliedEvent.OutputTuple,
+    LossAppliedEvent.OutputObject
   >;
   getEvent(
     key: "WithdrawRecorded"
@@ -551,6 +645,17 @@ export interface Accounting extends BaseContract {
       FeeRecordedEvent.OutputObject
     >;
 
+    "GainSplit(uint256,uint256,uint256,uint256,uint256)": TypedContractEvent<
+      GainSplitEvent.InputTuple,
+      GainSplitEvent.OutputTuple,
+      GainSplitEvent.OutputObject
+    >;
+    GainSplit: TypedContractEvent<
+      GainSplitEvent.InputTuple,
+      GainSplitEvent.OutputTuple,
+      GainSplitEvent.OutputObject
+    >;
+
     "JuniorWethTVLSet(uint256)": TypedContractEvent<
       JuniorWethTVLSetEvent.InputTuple,
       JuniorWethTVLSetEvent.OutputTuple,
@@ -560,6 +665,17 @@ export interface Accounting extends BaseContract {
       JuniorWethTVLSetEvent.InputTuple,
       JuniorWethTVLSetEvent.OutputTuple,
       JuniorWethTVLSetEvent.OutputObject
+    >;
+
+    "LossApplied(uint256,uint256,uint256,uint256)": TypedContractEvent<
+      LossAppliedEvent.InputTuple,
+      LossAppliedEvent.OutputTuple,
+      LossAppliedEvent.OutputObject
+    >;
+    LossApplied: TypedContractEvent<
+      LossAppliedEvent.InputTuple,
+      LossAppliedEvent.OutputTuple,
+      LossAppliedEvent.OutputObject
     >;
 
     "WithdrawRecorded(uint8,uint256)": TypedContractEvent<

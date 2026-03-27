@@ -12,7 +12,8 @@
       "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2/node_modules/@nomicfoundation/hardhat-ethers -name *.d.ts)",
       "Bash(grep:*)",
       "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2/node_modules -path *@aave* -name *.sol)",
-      "Bash(find node_modules/@openzeppelin/contracts -name ERC4626*)"
+      "Bash(find node_modules/@openzeppelin/contracts -name ERC4626*)",
+      "Bash(ARB_RPC_URL=https://arb1.arbitrum.io/rpc npx hardhat test test/integration/FullFlow.test.ts)"
     ]
   }
 }
