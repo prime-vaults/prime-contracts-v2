@@ -15,6 +15,8 @@ import type * as libraries from "./libraries";
 export type { libraries };
 import type * as oracles from "./oracles";
 export type { oracles };
+import type * as periphery from "./periphery";
+export type { periphery };
 import type * as strategies from "./strategies";
 export type { strategies };
 import type * as test from "./test";

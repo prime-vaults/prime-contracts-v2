@@ -218,6 +218,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SUSDaiAprPairProvider__factory>;
     getContractFactory(
+      name: "IPrimeCDOLens",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IPrimeCDOLens__factory>;
+    getContractFactory(
+      name: "ITrancheVaultLens",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ITrancheVaultLens__factory>;
+    getContractFactory(
+      name: "PrimeLens",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.PrimeLens__factory>;
+    getContractFactory(
       name: "BaseStrategy",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.BaseStrategy__factory>;
@@ -538,6 +550,21 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.SUSDaiAprPairProvider>;
     getContractAt(
+      name: "IPrimeCDOLens",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IPrimeCDOLens>;
+    getContractAt(
+      name: "ITrancheVaultLens",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ITrancheVaultLens>;
+    getContractAt(
+      name: "PrimeLens",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.PrimeLens>;
+    getContractAt(
       name: "BaseStrategy",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -823,6 +850,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SUSDaiAprPairProvider>;
     deployContract(
+      name: "IPrimeCDOLens",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IPrimeCDOLens>;
+    deployContract(
+      name: "ITrancheVaultLens",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITrancheVaultLens>;
+    deployContract(
+      name: "PrimeLens",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.PrimeLens>;
+    deployContract(
       name: "BaseStrategy",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.BaseStrategy>;
@@ -1142,6 +1181,21 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SUSDaiAprPairProvider>;
+    deployContract(
+      name: "IPrimeCDOLens",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IPrimeCDOLens>;
+    deployContract(
+      name: "ITrancheVaultLens",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITrancheVaultLens>;
+    deployContract(
+      name: "PrimeLens",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.PrimeLens>;
     deployContract(
       name: "BaseStrategy",
       args: any[],

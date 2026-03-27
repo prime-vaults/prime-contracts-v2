@@ -108,6 +108,12 @@ export type { IAavePool } from "./contracts/oracles/providers/SUSDaiAprPairProvi
 export { IAavePool__factory } from "./factories/contracts/oracles/providers/SUSDaiAprPairProvider.sol/IAavePool__factory";
 export type { SUSDaiAprPairProvider } from "./contracts/oracles/providers/SUSDaiAprPairProvider.sol/SUSDaiAprPairProvider";
 export { SUSDaiAprPairProvider__factory } from "./factories/contracts/oracles/providers/SUSDaiAprPairProvider.sol/SUSDaiAprPairProvider__factory";
+export type { IPrimeCDOLens } from "./contracts/periphery/PrimeLens.sol/IPrimeCDOLens";
+export { IPrimeCDOLens__factory } from "./factories/contracts/periphery/PrimeLens.sol/IPrimeCDOLens__factory";
+export type { ITrancheVaultLens } from "./contracts/periphery/PrimeLens.sol/ITrancheVaultLens";
+export { ITrancheVaultLens__factory } from "./factories/contracts/periphery/PrimeLens.sol/ITrancheVaultLens__factory";
+export type { PrimeLens } from "./contracts/periphery/PrimeLens.sol/PrimeLens";
+export { PrimeLens__factory } from "./factories/contracts/periphery/PrimeLens.sol/PrimeLens__factory";
 export type { BaseStrategy } from "./contracts/strategies/BaseStrategy";
 export { BaseStrategy__factory } from "./factories/contracts/strategies/BaseStrategy__factory";
 export type { SUSDaiCooldownRequestImpl } from "./contracts/strategies/implementations/cooldown/SUSDaiCooldownRequestImpl";

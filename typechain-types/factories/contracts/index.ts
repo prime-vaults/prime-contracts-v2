@@ -8,5 +8,6 @@ export * as interfaces from "./interfaces";
 export * as junior from "./junior";
 export * as libraries from "./libraries";
 export * as oracles from "./oracles";
+export * as periphery from "./periphery";
 export * as strategies from "./strategies";
 export * as test from "./test";
