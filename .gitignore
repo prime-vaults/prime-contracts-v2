@@ -29,3 +29,7 @@ ignition/deployments/
 
 
 .claude
+
+# SDK lib build output
+lib/node_modules
+lib/dist

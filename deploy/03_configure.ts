@@ -118,3 +118,7 @@ main().catch((err) => {
   console.error(err);
   process.exitCode = 1;
 });
+
+//npx hardhat run deploy/01_deploy_shared.ts --network arbitrum
+//npx hardhat run deploy/02_deploy_usdai_market.ts --network arbitrum
+// npx hardhat run deploy/03_configure.ts --network arbitrum

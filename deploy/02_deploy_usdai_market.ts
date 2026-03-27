@@ -26,9 +26,7 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════
 
   const ProviderFactory = await hre.ethers.getContractFactory("SUSDaiAprPairProvider");
-  const aprProvider = await ProviderFactory.deploy(
-    ARBITRUM.AAVE_V3_POOL, [ARBITRUM.USDAI], ARBITRUM.SUSDAI,
-  );
+  const aprProvider = await ProviderFactory.deploy(ARBITRUM.AAVE_V3_POOL, [ARBITRUM.USDAI], ARBITRUM.SUSDAI);
   await aprProvider.waitForDeployment();
   const aprProviderAddr = await aprProvider.getAddress();
   console.log(`  AprProvider:       ${aprProviderAddr}`);
@@ -38,9 +36,7 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════
 
   const FeedFactory = await hre.ethers.getContractFactory("AprPairFeed");
-  const aprFeed = await FeedFactory.deploy(
-    deployer.address, aprProviderAddr, DEFAULTS.APR_STALE_AFTER,
-  );
+  const aprFeed = await FeedFactory.deploy(deployer.address, aprProviderAddr, DEFAULTS.APR_STALE_AFTER);
   await aprFeed.waitForDeployment();
   const aprFeedAddr = await aprFeed.getAddress();
   console.log(`  AprPairFeed:       ${aprFeedAddr}`);
@@ -70,9 +66,7 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════
 
   const ImplFactory = await hre.ethers.getContractFactory("SUSDaiCooldownRequestImpl");
-  const cooldownImpl = await ImplFactory.deploy(
-    ARBITRUM.SUSDAI, ARBITRUM.USDAI, shared.unstakeCooldown,
-  );
+  const cooldownImpl = await ImplFactory.deploy(ARBITRUM.SUSDAI, ARBITRUM.USDAI, shared.unstakeCooldown);
   await cooldownImpl.waitForDeployment();
   const cooldownImplAddr = await cooldownImpl.getAddress();
   console.log(`  CooldownImpl:      ${cooldownImplAddr}`);
@@ -92,8 +86,11 @@ async function main() {
 
   const StratFactory = await hre.ethers.getContractFactory("SUSDaiStrategy");
   const strategy = await StratFactory.deploy(
-    predictedCDO, ARBITRUM.USDAI, ARBITRUM.SUSDAI,
-    shared.unstakeCooldown, deployer.address,
+    predictedCDO,
+    ARBITRUM.USDAI,
+    ARBITRUM.SUSDAI,
+    shared.unstakeCooldown,
+    deployer.address,
   );
   await strategy.waitForDeployment();
   const strategyAddr = await strategy.getAddress();
@@ -105,8 +102,10 @@ async function main() {
 
   const AdapterFactory = await hre.ethers.getContractFactory("AaveWETHAdapter");
   const aaveAdapter = await AdapterFactory.deploy(
-    ARBITRUM.AAVE_V3_POOL, ARBITRUM.WETH,
-    shared.wethPriceOracle, predictedCDO,
+    ARBITRUM.AAVE_V3_POOL,
+    ARBITRUM.WETH,
+    shared.wethPriceOracle,
+    predictedCDO,
   );
   await aaveAdapter.waitForDeployment();
   const aaveAdapterAddr = await aaveAdapter.getAddress();
@@ -144,24 +143,36 @@ async function main() {
   const VaultFactory = await hre.ethers.getContractFactory("TrancheVault");
 
   const seniorVault = await VaultFactory.deploy(
-    primeCDOAddr, 0, ARBITRUM.USDAI, ARBITRUM.WETH,
-    "PrimeVaults Senior sUSDai", "pvSR-sUSDai",
+    primeCDOAddr,
+    0,
+    ARBITRUM.USDAI,
+    ARBITRUM.WETH,
+    "Prime Senior sUSDai",
+    "srUSDai",
   );
   await seniorVault.waitForDeployment();
   const seniorVaultAddr = await seniorVault.getAddress();
   console.log(`  SeniorVault:       ${seniorVaultAddr}`);
 
   const mezzVault = await VaultFactory.deploy(
-    primeCDOAddr, 1, ARBITRUM.USDAI, ARBITRUM.WETH,
-    "PrimeVaults Mezzanine sUSDai", "pvMZ-sUSDai",
+    primeCDOAddr,
+    1,
+    ARBITRUM.USDAI,
+    ARBITRUM.WETH,
+    "Prime Mezzanine sUSDai",
+    "mzUSDai",
   );
   await mezzVault.waitForDeployment();
   const mezzVaultAddr = await mezzVault.getAddress();
   console.log(`  MezzVault:         ${mezzVaultAddr}`);
 
   const juniorVault = await VaultFactory.deploy(
-    primeCDOAddr, 2, ARBITRUM.USDAI, ARBITRUM.WETH,
-    "PrimeVaults Junior sUSDai", "pvJR-sUSDai",
+    primeCDOAddr,
+    2,
+    ARBITRUM.USDAI,
+    ARBITRUM.WETH,
+    "Prime Junior sUSDai",
+    "jrUSDai",
   );
   await juniorVault.waitForDeployment();
   const juniorVaultAddr = await juniorVault.getAddress();

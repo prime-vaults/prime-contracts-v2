@@ -13,7 +13,10 @@
       "Bash(grep:*)",
       "Bash(find /Users/desnet_dev/Documents/prime-vaults-v2/prime-contracts-v2/node_modules -path *@aave* -name *.sol)",
       "Bash(find node_modules/@openzeppelin/contracts -name ERC4626*)",
-      "Bash(ARB_RPC_URL=https://arb1.arbitrum.io/rpc npx hardhat test test/integration/FullFlow.test.ts)"
+      "Bash(ARB_RPC_URL=https://arb1.arbitrum.io/rpc npx hardhat test test/integration/FullFlow.test.ts)",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); print\\(json.dumps\\(data[''''abi''''], indent=2\\)\\)\")",
+      "Bash(pnpm build:*)",
+      "Bash(npx tsup:*)"
     ]
   }
 }
