@@ -2,49 +2,31 @@
 
 TypeScript SDK for interacting with PrimeVaults V3 — a 3-tranche structured yield protocol on Arbitrum.
 
-## Directory Structure
-
-```
-lib/
-├── PrimeVaultsSDK.ts   # Main class with all SDK logic
-├── types.ts            # Type definitions (interfaces, types)
-├── index.ts            # Export entry point
-├── abis/               # Smart contract ABIs (PrimeLens, TrancheVault, ERC20)
-├── dist/               # Build output (tsup)
-├── tsup.config.ts      # Build config
-├── tsconfig.json       # TypeScript config
-└── package.json        # Dependencies and scripts
-```
-
 ## Installation
 
 ```bash
-# From the project root
-cd lib
-pnpm install
+npm install primevaults-sdk
+# or
+pnpm add primevaults-sdk
 ```
 
 ### Peer Dependency
 
-The SDK requires `viem` >= 2.0.0. Your frontend must have viem installed:
+The SDK requires `viem` >= 2.0.0:
 
 ```bash
 pnpm add viem
 ```
 
-## Build
+## Build (from source)
 
 ```bash
 cd lib
+pnpm install
 pnpm build       # Build CJS + ESM + types into dist/
-pnpm dev         # Watch mode (auto-rebuild on changes)
-pnpm typecheck   # TypeScript check (no emit)
+pnpm dev         # Watch mode
+pnpm typecheck   # TypeScript check
 ```
-
-Output after build:
-- `dist/index.js` — CommonJS
-- `dist/index.mjs` — ESM
-- `dist/index.d.ts` — Type declarations
 
 ## Usage
 
@@ -57,10 +39,10 @@ const sdk = new PrimeVaultsSDK({
   rpcUrl: "https://arb1.arbitrum.io/rpc",
   chainId: 42161,
   addresses: {
-    primeCDO: "0x1869F39e4E4EA85776C0fe446ac03a2D6C86F543",
-    seniorVault: "0xE77ec530D2e550049df9347E05612c58fc4C12A7",
-    mezzVault: "0x71a4E7559eBF87611efB183a71EdA3Df77F0f766",
-    juniorVault: "0x323eB19E3a34096947247fd97d3F5a7F098a0d8C",
+    primeCDO: "0x...",
+    seniorVault: "0x...",
+    mezzVault: "0x...",
+    juniorVault: "0x...",
     primeLens: "0x...", // required for aggregated view functions
   },
 });
@@ -87,13 +69,6 @@ console.log("Senior share price:", sdk.formatSharePrice(senior.sharePrice));
 console.log("Junior total assets:", sdk.formatAmount(junior.totalAssets));
 ```
 
-#### Single Tranche Info
-
-```ts
-const info = await sdk.getTrancheInfo("SENIOR");
-// TrancheId: "SENIOR" | "MEZZ" | "JUNIOR"
-```
-
 #### Junior WETH Position
 
 ```ts
@@ -108,7 +83,6 @@ console.log("Aave APR:", sdk.formatRatio(pos.aaveAPR));
 ```ts
 const portfolio = await sdk.getUserPortfolio("0xUserAddress");
 console.log("Senior:", sdk.formatAmount(portfolio.senior.assets));
-console.log("Mezz:", sdk.formatAmount(portfolio.mezz.assets));
 console.log("Junior:", sdk.formatAmount(portfolio.junior.assets));
 console.log("Total:", sdk.formatAmount(portfolio.totalAssetsUSD));
 ```
@@ -126,9 +100,10 @@ console.log("Excess/Deficit:", sdk.formatAmount(status.excessOrDeficitUSD));
 
 ```ts
 const cond = await sdk.previewWithdrawCondition("SENIOR");
-// mechanism: 0=instant, 1=ERC20 lock, 2=unstake, 3=shares lock
+// mechanism: 0=NONE (instant), 1=ASSETS_LOCK, 2=SHARES_LOCK
 console.log("Mechanism:", cond.mechanism);
 console.log("Fee:", sdk.formatBps(cond.feeBps));
+console.log("Cooldown:", Number(cond.cooldownDuration) / 3600, "hours");
 ```
 
 #### Pending & Claimable Withdrawals
@@ -138,14 +113,48 @@ const pending = await sdk.getUserPendingWithdraws("0xUser");
 const claimable = await sdk.getClaimableWithdraws("0xUser");
 ```
 
-### 3. Write Operations (requires WalletClient)
+### 3. Estimate Helpers
 
-Write operations require a [viem WalletClient](https://viem.sh/docs/clients/wallet.html).
+#### Estimate WETH for Junior Deposit
+
+```ts
+const est = await sdk.estimateWETHAmount(sdk.parseAmount("1000"));
+console.log("WETH needed:", sdk.formatAmount(est.wethAmount));
+console.log("WETH price:", sdk.formatAmount(est.wethPrice));
+```
+
+#### Estimate Junior Withdraw
+
+Junior withdrawals return both base assets (with fee) and proportional WETH:
+
+```ts
+const est = await sdk.estimateJuniorWithdraw(sdk.parseAmount("100"));
+console.log("Base (gross):", sdk.formatAmount(est.baseAmount));
+console.log("Fee:", sdk.formatAmount(est.feeAmount), `(${sdk.formatBps(est.feeBps)})`);
+console.log("Base (net):", sdk.formatAmount(est.netBaseAmount));
+console.log("WETH received:", sdk.formatAmount(est.wethAmount));
+console.log("WETH value:", sdk.formatAmount(est.wethValueUSD));
+// mechanism: 0=instant, 1=assets_lock, 2=shares_lock
+console.log("Cooldown:", Number(est.cooldownDuration) / 3600, "hours");
+```
+
+### 4. Write Operations (requires WalletClient)
+
+All write operations return `WriteResult` with gas estimation:
+
+```ts
+interface WriteResult {
+  hash: string;           // Transaction hash
+  gasEstimate: bigint;    // Gas units estimated
+  gasPrice: bigint;       // Gas price (wei)
+  estimatedFeeWei: bigint; // gasEstimate * gasPrice
+}
+```
 
 #### Create a WalletClient
 
 ```ts
-import { createWalletClient, custom } from "viem";
+import { createWalletClient, custom, formatEther } from "viem";
 import { arbitrum } from "viem/chains";
 
 const walletClient = createWalletClient({
@@ -157,55 +166,47 @@ const walletClient = createWalletClient({
 #### Approve + Deposit into Senior/Mezz
 
 ```ts
-const amount = sdk.parseAmount("1000"); // 1000 tokens (18 decimals)
+const amount = sdk.parseAmount("1000");
 
-// Step 1: Approve vault to spend tokens
-await sdk.approveVaultDeposit(walletClient, "SENIOR", tokenAddress, amount);
+// Step 1: Approve
+const approve = await sdk.approveVaultDeposit(walletClient, "SENIOR", tokenAddress, amount);
+console.log("Approve fee:", formatEther(approve.estimatedFeeWei), "ETH");
 
 // Step 2: Deposit
-await sdk.deposit(walletClient, "SENIOR", amount, receiverAddress);
+const deposit = await sdk.deposit(walletClient, "SENIOR", amount, receiverAddress);
+console.log("Deposit fee:", formatEther(deposit.estimatedFeeWei), "ETH");
 ```
 
 #### Junior Deposit (base + WETH)
 
-Junior requires both base asset and WETH:
-
 ```ts
 const baseAmount = sdk.parseAmount("800");
 const wethAmount = sdk.parseAmount("0.1");
-await sdk.depositJunior(walletClient, baseAmount, wethAmount, receiverAddress);
+const result = await sdk.depositJunior(walletClient, baseAmount, wethAmount, receiverAddress);
+console.log("TX:", result.hash, "| Fee:", formatEther(result.estimatedFeeWei), "ETH");
 ```
 
 #### Request Withdrawal
 
 ```ts
 const shares = sdk.parseAmount("500");
-const txHash = await sdk.requestWithdraw(walletClient, "MEZZ", shares, outputToken, receiver);
+const result = await sdk.requestWithdraw(walletClient, "MEZZ", shares, outputToken, receiver);
+console.log("TX:", result.hash);
 ```
 
 #### Claim After Cooldown
 
 ```ts
 // For ERC20/Unstake cooldown
-await sdk.claimWithdraw(walletClient, "MEZZ", cooldownId, cooldownHandler);
+const claim = await sdk.claimWithdraw(walletClient, "MEZZ", cooldownId, cooldownHandler);
 
 // For Shares cooldown
-await sdk.claimSharesWithdraw(walletClient, "MEZZ", cooldownId, outputToken);
-```
-
-### 4. Utility Methods
-
-```ts
-sdk.formatAmount(1000000000000000000n);     // "1.0"        — bigint -> readable string
-sdk.parseAmount("1.0");                      // 1000000000000000000n — string -> bigint
-sdk.formatSharePrice(1050000000000000000n);  // "1.05"       — share price display
-sdk.formatBps(50n);                          // "0.5%"       — basis points -> percentage
-sdk.formatRatio(200000000000000000n);        // "20.00%"     — 18-decimal ratio -> percentage
+const claim = await sdk.claimSharesWithdraw(walletClient, "MEZZ", cooldownId, outputToken);
 ```
 
 ### 5. Per-Vault ERC4626 Read Functions
 
-These functions read directly from each vault contract (no PrimeLens required):
+These read directly from each vault contract (no PrimeLens required):
 
 | Function                           | Description                              |
 | ---------------------------------- | ---------------------------------------- |
@@ -219,52 +220,60 @@ These functions read directly from each vault contract (no PrimeLens required):
 | `getVaultDecimals(tranche)`        | Vault decimals                           |
 | `getVaultAsset(tranche)`           | Underlying asset address                 |
 
-### 6. ERC20 Helper Functions
+### 6. Utility Methods
 
 ```ts
-const balance = await sdk.getTokenBalance(tokenAddress, userAddress);
-const allowance = await sdk.getTokenAllowance(tokenAddress, owner, spender);
+sdk.formatAmount(1000000000000000000n);     // "1.0"
+sdk.parseAmount("1.0");                      // 1000000000000000000n
+sdk.formatSharePrice(1050000000000000000n);  // "1.05"
+sdk.formatBps(50n);                          // "0.5%"
+sdk.formatRatio(200000000000000000n);        // "20.00%"
 ```
 
 ## Types
 
-All types are exported from the package:
-
 ```ts
 import type {
-  PrimeVaultsConfig,   // SDK initialization config
-  ContractAddresses,   // Contract addresses
-  TrancheId,           // "SENIOR" | "MEZZ" | "JUNIOR"
-  TrancheInfo,         // Tranche info (name, symbol, totalAssets, sharePrice, ...)
-  JuniorPosition,      // Junior WETH position (baseTVL, wethTVL, currentRatio, ...)
-  ProtocolHealth,      // Protocol health (TVL, coverage, paused, ...)
-  PendingWithdraw,     // Pending withdrawal (requestId, amount, unlockTime, ...)
-  WithdrawCondition,   // Withdrawal conditions (mechanism, feeBps, cooldownDuration, ...)
-  RebalanceStatus,     // WETH rebalance status (currentRatio, needsSell/Buy, ...)
-  CDOWithdrawResult,   // CDO withdrawal result (isInstant, cooldownId, feeAmount, ...)
-  UserPortfolio,       // Aggregated user portfolio across all tranches
+  PrimeVaultsConfig,       // SDK initialization config
+  ContractAddresses,       // Contract addresses
+  TrancheId,               // "SENIOR" | "MEZZ" | "JUNIOR"
+  TrancheInfo,             // Tranche info (name, symbol, totalAssets, sharePrice, ...)
+  JuniorPosition,          // Junior WETH position (baseTVL, wethTVL, currentRatio, ...)
+  ProtocolHealth,          // Protocol health (TVL, coverage, paused, ...)
+  PendingWithdraw,         // Pending withdrawal (requestId, amount, unlockTime, ...)
+  WithdrawCondition,       // Withdrawal conditions (mechanism, feeBps, cooldownDuration, ...)
+  RebalanceStatus,         // WETH rebalance status (currentRatio, needsSell/Buy, ...)
+  CDOWithdrawResult,       // CDO withdrawal result (isInstant, cooldownId, feeAmount, ...)
+  UserPortfolio,           // Aggregated user portfolio across all tranches
+  WriteResult,             // Write operation result (hash, gasEstimate, gasPrice, estimatedFeeWei)
+  EstimateJuniorWithdraw,  // Junior withdraw estimate (base, fee, WETH, mechanism, cooldown)
 } from "primevaults-sdk";
+```
+
+## Scripts
+
+Example scripts for testing on Arbitrum mainnet:
+
+```bash
+# Deposit into Senior/Mezz
+ARB_RPC_URL=<url> PRIVATE_KEY=<key> npx tsx lib/scripts/deposit-flow.ts --tranche SENIOR --amount 10
+
+# Junior dual-asset deposit (auto-calculates 80/20 split)
+ARB_RPC_URL=<url> PRIVATE_KEY=<key> npx tsx lib/scripts/deposit-junior-flow.ts --amount 100
+
+# Withdraw (request + claim)
+ARB_RPC_URL=<url> PRIVATE_KEY=<key> npx tsx lib/scripts/withdraw-flow.ts --tranche SENIOR --shares 10
+
+# Claim pending cooldown
+ARB_RPC_URL=<url> PRIVATE_KEY=<key> npx tsx lib/scripts/withdraw-flow.ts --claim --cooldown-id 1 --handler 0x... --tranche SENIOR
+
+# Dry run (preview only, no tx)
+ARB_RPC_URL=<url> PRIVATE_KEY=<key> npx tsx lib/scripts/deposit-flow.ts --tranche SENIOR --amount 10 --dry-run
 ```
 
 ## Deployed Addresses (Arbitrum)
 
-```json
-{
-  "primeCDO": "0x1869F39e4E4EA85776C0fe446ac03a2D6C86F543",
-  "seniorVault": "0xE77ec530D2e550049df9347E05612c58fc4C12A7",
-  "mezzVault": "0x71a4E7559eBF87611efB183a71EdA3Df77F0f766",
-  "juniorVault": "0x323eB19E3a34096947247fd97d3F5a7F098a0d8C",
-  "accounting": "0x7591134ba592961103c1E1dc7C4Ae2Fc0A6Fb2Fc",
-  "strategy": "0x3e56c74B30433E9afe65E96744439Ca080A078E1",
-  "aaveAdapter": "0x81b38dd6DCe97Fc4edA1e8f43455611151a4e494",
-  "swapFacility": "0x174eb7789A87d72d1a812799195A9491bCd8B17c",
-  "wethPriceOracle": "0x7dBDc6d655125bad5fDaa540B3AbFF0a83bB02DF",
-  "redemptionPolicy": "0xb1DF2940530F827923eA15913D5f03FDECd99596",
-  "aprFeed": "0xb65b26678089488eE6159D9C5774ba4A7CfE8C9Ff9D"
-}
-```
-
-See full list at `deploy/deployed.json`.
+See `deploy/deployed.json` for the latest addresses.
 
 ## Requirements
 

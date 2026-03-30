@@ -22,6 +22,7 @@ import type {
   CDOWithdrawResult,
   UserPortfolio,
   WriteResult,
+  EstimateJuniorWithdraw,
 } from "./types";
 
 const TRANCHE_MAP: Record<TrancheId, number> = { SENIOR: 0, MEZZ: 1, JUNIOR: 2 };
@@ -456,6 +457,44 @@ export class PrimeVaultsSDK {
   // ═══════════════════════════════════════════════════════════════════
   //  READ — Estimate helpers
   // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Estimate Junior withdraw output for a given share amount.
+   * Junior withdrawals return both base assets (with fee) and proportional WETH.
+   *
+   * Base: shares → assets via previewRedeem, then fee = assets * feeBps / 10_000
+   * WETH: proportional = totalWETH * shares / totalJuniorShares
+   *
+   * @param shares Junior vault shares to withdraw (18 decimals)
+   * @returns Breakdown of base amount, fee, net, WETH amount, mechanism, cooldown
+   */
+  async estimateJuniorWithdraw(shares: bigint): Promise<EstimateJuniorWithdraw> {
+    const [baseAmount, condition, juniorPos, totalSupply] = await Promise.all([
+      this.previewRedeem("JUNIOR", shares),
+      this.previewWithdrawCondition("JUNIOR"),
+      this.getJuniorPosition(),
+      this.getTotalSupply("JUNIOR"),
+    ]);
+
+    const feeAmount = (baseAmount * condition.feeBps) / 10_000n;
+    const netBaseAmount = baseAmount - feeAmount;
+
+    const wethAmount = totalSupply > 0n ? (juniorPos.wethAmount * shares) / totalSupply : 0n;
+    const wethValueUSD = juniorPos.wethPrice > 0n
+      ? (wethAmount * juniorPos.wethPrice) / 1_000_000_000_000_000_000n
+      : 0n;
+
+    return {
+      baseAmount,
+      feeBps: condition.feeBps,
+      feeAmount,
+      netBaseAmount,
+      wethAmount,
+      wethValueUSD,
+      mechanism: condition.mechanism,
+      cooldownDuration: condition.cooldownDuration,
+    };
+  }
 
   /**
    * Estimate the WETH amount needed for a Junior deposit given a base asset amount.

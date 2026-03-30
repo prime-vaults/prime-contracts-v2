@@ -99,6 +99,17 @@ export interface CDOWithdrawResult {
   appliedCooldownType: number;
 }
 
+export interface EstimateJuniorWithdraw {
+  baseAmount: bigint;
+  feeBps: bigint;
+  feeAmount: bigint;
+  netBaseAmount: bigint;
+  wethAmount: bigint;
+  wethValueUSD: bigint;
+  mechanism: number;
+  cooldownDuration: bigint;
+}
+
 export interface WriteResult {
   hash: string;
   gasEstimate: bigint;

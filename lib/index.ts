@@ -10,5 +10,7 @@ export type {
   RebalanceStatus,
   CDOWithdrawResult,
   UserPortfolio,
+  WriteResult,
+  EstimateJuniorWithdraw,
   TrancheId,
 } from "./types";
