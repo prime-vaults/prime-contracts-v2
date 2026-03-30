@@ -206,7 +206,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         _updateAccounting();
 
         // 2. Validate WETH ratio
-        uint256 wethPrice = i_wethOracle.getWETHPrice();
+        uint256 wethPrice = i_wethOracle.getSpotPrice();
         uint256 wethValueUSD = (wethAmount * wethPrice) / PRECISION;
         uint256 totalValueUSD = baseAmount + wethValueUSD;
 
@@ -510,7 +510,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         _updateAccounting();
 
         // 1. Determine how much WETH to sell (lossUSD / wethPrice)
-        uint256 wethPrice = i_wethOracle.getWETHPrice();
+        uint256 wethPrice = i_wethOracle.getSpotPrice();
         uint256 wethNeeded = (lossUSD * PRECISION) / wethPrice;
 
         // 2. Cap at available WETH in Aave
@@ -554,7 +554,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         _updateAccounting();
 
         // 1. Compute current WETH ratio
-        uint256 wethPrice = i_wethOracle.getWETHPrice();
+        uint256 wethPrice = i_wethOracle.getSpotPrice();
         uint256 wethAssets = i_aaveWETHAdapter.totalAssets();
         uint256 wethValueUSD = (wethAssets * wethPrice) / PRECISION;
         uint256 juniorTVL = i_accounting.getJuniorTVL();
@@ -606,7 +606,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         _updateAccounting();
 
         // 1. Compute current WETH ratio
-        uint256 wethPrice = i_wethOracle.getWETHPrice();
+        uint256 wethPrice = i_wethOracle.getSpotPrice();
         uint256 wethAssets = i_aaveWETHAdapter.totalAssets();
         uint256 wethValueUSD = (wethAssets * wethPrice) / PRECISION;
         uint256 juniorTVL = i_accounting.getJuniorTVL();

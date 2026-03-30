@@ -228,7 +228,7 @@ contract PrimeLens {
         pos.wethTVL = i_accounting.getJuniorWethTVL();
         pos.totalTVL = pos.baseTVL + pos.wethTVL;
         pos.wethAmount = i_aaveAdapter.totalAssets();
-        pos.wethPrice = i_wethOracle.getWETHPrice();
+        pos.wethPrice = i_wethOracle.getSpotPrice();
         pos.currentRatio = pos.totalTVL > 0 ? (pos.wethTVL * PRECISION) / pos.totalTVL : 0;
         pos.aaveAPR = i_aaveAdapter.currentAPR();
     }
@@ -349,7 +349,7 @@ contract PrimeLens {
      */
     function getWETHRebalanceStatus() external view returns (RebalanceStatus memory status) {
         status.wethAmount = i_aaveAdapter.totalAssets();
-        status.wethPrice = i_wethOracle.getWETHPrice();
+        status.wethPrice = i_wethOracle.getSpotPrice();
         status.wethValueUSD = (status.wethAmount * status.wethPrice) / PRECISION;
         status.targetRatio = i_cdo.s_ratioTarget();
         status.tolerance = i_cdo.s_ratioTolerance();

@@ -15,17 +15,11 @@
  *   --dry-run  Preview only
  */
 
-import {
-  createWalletClient,
-  createPublicClient,
-  http,
-  parseUnits,
-  formatUnits,
-  type Hash,
-} from "viem";
+import { createWalletClient, createPublicClient, http, parseUnits, formatUnits, type Hash, formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
 import { PrimeVaultsSDK } from "../PrimeVaultsSDK";
+import "dotenv/config";
 
 // ═══════════════════════════════════════════════════════════════════
 //  Config
@@ -42,15 +36,13 @@ const DEPLOYED = {
 const USDAI = "0x0A1a1A107E45b7Ced86833863f482BC5f4ed82EF";
 const WETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
 
-const PRECISION = 10n ** 18n;
-
 // ═══════════════════════════════════════════════════════════════════
 //  Parse args
 // ═══════════════════════════════════════════════════════════════════
-
+//npx tsx lib/scripts/deposit-junior-flow.ts --dry-run
 function parseArgs() {
   const args = process.argv.slice(2);
-  let amount = "100";
+  let amount = "0.1";
   let dryRun = false;
 
   for (let i = 0; i < args.length; i++) {
@@ -158,8 +150,9 @@ async function main() {
   const usdaiAllowance = await sdk.getTokenAllowance(USDAI, user, DEPLOYED.juniorVault);
   if (usdaiAllowance < baseAmount) {
     console.log(`\n  Approving ${formatUnits(baseAmount, 18)} USD.AI for Junior vault...`);
-    const tx = await sdk.approveVaultDeposit(walletClient, "JUNIOR", USDAI, baseAmount);
-    await waitForTx(publicClient, tx, "Approve USD.AI");
+    const approveUsdai = await sdk.approveVaultDeposit(walletClient, "JUNIOR", USDAI, baseAmount);
+    console.log(`  Gas: ${approveUsdai.gasEstimate} units | Fee: ~${formatEther(approveUsdai.estimatedFeeWei)} ETH`);
+    await waitForTx(publicClient, approveUsdai.hash as Hash, "Approve USD.AI");
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -169,17 +162,21 @@ async function main() {
   const wethAllowance = await sdk.getTokenAllowance(WETH, user, DEPLOYED.juniorVault);
   if (wethAllowance < wethAmount) {
     console.log(`  Approving ${formatUnits(wethAmount, 18)} WETH for Junior vault...`);
-    const tx = await sdk.approveToken(walletClient, WETH, DEPLOYED.juniorVault, wethAmount);
-    await waitForTx(publicClient, tx, "Approve WETH");
+    const approveWeth = await sdk.approveToken(walletClient, WETH, DEPLOYED.juniorVault, wethAmount);
+    console.log(`  Gas: ${approveWeth.gasEstimate} units | Fee: ~${formatEther(approveWeth.estimatedFeeWei)} ETH`);
+    await waitForTx(publicClient, approveWeth.hash as Hash, "Approve WETH");
   }
 
   // ─────────────────────────────────────────────────────────────────
   //  7. Deposit Junior
   // ─────────────────────────────────────────────────────────────────
 
-  console.log(`  Depositing ${formatUnits(baseAmount, 18)} USD.AI + ${formatUnits(wethAmount, 18)} WETH into Junior...`);
-  const depositTx = await sdk.depositJunior(walletClient, baseAmount, wethAmount, user);
-  await waitForTx(publicClient, depositTx, "DepositJunior");
+  console.log(
+    `  Depositing ${formatUnits(baseAmount, 18)} USD.AI + ${formatUnits(wethAmount, 18)} WETH into Junior...`,
+  );
+  const depositResult = await sdk.depositJunior(walletClient, baseAmount, wethAmount, user);
+  console.log(`  Gas: ${depositResult.gasEstimate} units | Fee: ~${formatEther(depositResult.estimatedFeeWei)} ETH`);
+  await waitForTx(publicClient, depositResult.hash as Hash, "DepositJunior");
 
   // ─────────────────────────────────────────────────────────────────
   //  8. Verify

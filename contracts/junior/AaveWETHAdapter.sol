@@ -141,12 +141,12 @@ contract AaveWETHAdapter is IAaveWETHAdapter {
     }
 
     /**
-     * @notice Total WETH value in USD using 30-min TWAP price.
-     * @dev Uses WETHPriceOracle.getWETHPrice() for manipulation-resistant TVL.
+     * @notice Total WETH value in USD using latest Chainlink spot price.
+     * @dev Uses WETHPriceOracle.getSpotPrice() for MVP simplicity.
      */
     function totalAssetsUSD() external view override returns (uint256) {
         uint256 balance = i_aWeth.balanceOf(address(this));
-        uint256 price = i_priceOracle.getWETHPrice();
+        uint256 price = i_priceOracle.getSpotPrice();
         return balance * price / PRECISION;
     }
 

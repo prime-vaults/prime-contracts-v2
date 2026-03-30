@@ -26,6 +26,7 @@ import {
   http,
   parseUnits,
   formatUnits,
+  formatEther,
   type Hash,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -181,8 +182,9 @@ async function requestWithdraw() {
   // ─────────────────────────────────────────────────────────────────
 
   console.log(`\n  Requesting withdraw of ${shares} shares from ${tranche}...`);
-  const withdrawTx = await sdk.requestWithdraw(walletClient, tranche, withdrawShares, USDAI, user);
-  await waitForTx(publicClient, withdrawTx, "RequestWithdraw");
+  const withdrawResult = await sdk.requestWithdraw(walletClient, tranche, withdrawShares, USDAI, user);
+  console.log(`  Gas: ${withdrawResult.gasEstimate} units | Fee: ~${formatEther(withdrawResult.estimatedFeeWei)} ETH`);
+  await waitForTx(publicClient, withdrawResult.hash as Hash, "RequestWithdraw");
 
   // ─────────────────────────────────────────────────────────────────
   //  6. Verify — check pending withdraws again
@@ -254,8 +256,9 @@ async function claimWithdraw() {
   // ─────────────────────────────────────────────────────────────────
 
   console.log(`\n  Claiming cooldown #${cooldownId}...`);
-  const claimTx = await sdk.claimWithdraw(walletClient, tranche, BigInt(cooldownId), handler);
-  await waitForTx(publicClient, claimTx, "ClaimWithdraw");
+  const claimResult = await sdk.claimWithdraw(walletClient, tranche, BigInt(cooldownId), handler);
+  console.log(`  Gas: ${claimResult.gasEstimate} units | Fee: ~${formatEther(claimResult.estimatedFeeWei)} ETH`);
+  await waitForTx(publicClient, claimResult.hash as Hash, "ClaimWithdraw");
 
   // ─────────────────────────────────────────────────────────────────
   //  3. Verify

@@ -99,6 +99,13 @@ export interface CDOWithdrawResult {
   appliedCooldownType: number;
 }
 
+export interface WriteResult {
+  hash: string;
+  gasEstimate: bigint;
+  gasPrice: bigint;
+  estimatedFeeWei: bigint;
+}
+
 export interface UserPortfolio {
   senior: { shares: bigint; assets: bigint };
   mezz: { shares: bigint; assets: bigint };

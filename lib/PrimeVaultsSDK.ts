@@ -21,6 +21,7 @@ import type {
   RebalanceStatus,
   CDOWithdrawResult,
   UserPortfolio,
+  WriteResult,
 } from "./types";
 
 const TRANCHE_MAP: Record<TrancheId, number> = { SENIOR: 0, MEZZ: 1, JUNIOR: 2 };
@@ -348,16 +349,35 @@ export class PrimeVaultsSDK {
   //  WRITE — Deposit (requires walletClient)
   // ═══════════════════════════════════════════════════════════════════
 
-  async deposit(walletClient: WalletClient, tranche: TrancheId, assets: bigint, receiver: string): Promise<Hash> {
-    const vault = this._vaultAddress(tranche);
-    return walletClient.writeContract({
-      address: vault,
-      abi: TRANCHE_VAULT_ABI,
-      functionName: "deposit",
-      args: [assets, receiver as Address],
+  private async _estimateAndSend(
+    walletClient: WalletClient,
+    address: Address,
+    abi: readonly any[],
+    functionName: string,
+    args: readonly any[],
+  ): Promise<WriteResult> {
+    const account = walletClient.account!;
+    const [gasEstimate, gasPrice] = await Promise.all([
+      this.publicClient.estimateContractGas({ address, abi, functionName, args, account }),
+      this.publicClient.getGasPrice(),
+    ]);
+    const hash = await walletClient.writeContract({
+      address,
+      abi,
+      functionName,
+      args,
+      gas: gasEstimate,
       chain: walletClient.chain,
-      account: walletClient.account!,
+      account,
     });
+    return { hash, gasEstimate, gasPrice, estimatedFeeWei: gasEstimate * gasPrice };
+  }
+
+  async deposit(walletClient: WalletClient, tranche: TrancheId, assets: bigint, receiver: string): Promise<WriteResult> {
+    return this._estimateAndSend(
+      walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "deposit",
+      [assets, receiver as Address],
+    );
   }
 
   async depositJunior(
@@ -365,15 +385,11 @@ export class PrimeVaultsSDK {
     baseAmount: bigint,
     wethAmount: bigint,
     receiver: string,
-  ): Promise<Hash> {
-    return walletClient.writeContract({
-      address: this.addresses.juniorVault as Address,
-      abi: TRANCHE_VAULT_ABI,
-      functionName: "depositJunior",
-      args: [baseAmount, wethAmount, receiver as Address],
-      chain: walletClient.chain,
-      account: walletClient.account!,
-    });
+  ): Promise<WriteResult> {
+    return this._estimateAndSend(
+      walletClient, this.addresses.juniorVault as Address, TRANCHE_VAULT_ABI, "depositJunior",
+      [baseAmount, wethAmount, receiver as Address],
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -386,15 +402,11 @@ export class PrimeVaultsSDK {
     shares: bigint,
     outputToken: string,
     receiver: string,
-  ): Promise<Hash> {
-    return walletClient.writeContract({
-      address: this._vaultAddress(tranche),
-      abi: TRANCHE_VAULT_ABI,
-      functionName: "requestWithdraw",
-      args: [shares, outputToken as Address, receiver as Address],
-      chain: walletClient.chain,
-      account: walletClient.account!,
-    });
+  ): Promise<WriteResult> {
+    return this._estimateAndSend(
+      walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "requestWithdraw",
+      [shares, outputToken as Address, receiver as Address],
+    );
   }
 
   async claimWithdraw(
@@ -402,15 +414,11 @@ export class PrimeVaultsSDK {
     tranche: TrancheId,
     cooldownId: bigint,
     cooldownHandler: string,
-  ): Promise<Hash> {
-    return walletClient.writeContract({
-      address: this._vaultAddress(tranche),
-      abi: TRANCHE_VAULT_ABI,
-      functionName: "claimWithdraw",
-      args: [cooldownId, cooldownHandler as Address],
-      chain: walletClient.chain,
-      account: walletClient.account!,
-    });
+  ): Promise<WriteResult> {
+    return this._estimateAndSend(
+      walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "claimWithdraw",
+      [cooldownId, cooldownHandler as Address],
+    );
   }
 
   async claimSharesWithdraw(
@@ -418,30 +426,22 @@ export class PrimeVaultsSDK {
     tranche: TrancheId,
     cooldownId: bigint,
     outputToken: string,
-  ): Promise<Hash> {
-    return walletClient.writeContract({
-      address: this._vaultAddress(tranche),
-      abi: TRANCHE_VAULT_ABI,
-      functionName: "claimSharesWithdraw",
-      args: [cooldownId, outputToken as Address],
-      chain: walletClient.chain,
-      account: walletClient.account!,
-    });
+  ): Promise<WriteResult> {
+    return this._estimateAndSend(
+      walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "claimSharesWithdraw",
+      [cooldownId, outputToken as Address],
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════
   //  WRITE — ERC20 Approve
   // ═══════════════════════════════════════════════════════════════════
 
-  async approveToken(walletClient: WalletClient, token: string, spender: string, amount: bigint): Promise<Hash> {
-    return walletClient.writeContract({
-      address: token as Address,
-      abi: ERC20_ABI,
-      functionName: "approve",
-      args: [spender as Address, amount],
-      chain: walletClient.chain,
-      account: walletClient.account!,
-    });
+  async approveToken(walletClient: WalletClient, token: string, spender: string, amount: bigint): Promise<WriteResult> {
+    return this._estimateAndSend(
+      walletClient, token as Address, ERC20_ABI, "approve",
+      [spender as Address, amount],
+    );
   }
 
   async approveVaultDeposit(
@@ -449,7 +449,7 @@ export class PrimeVaultsSDK {
     tranche: TrancheId,
     token: string,
     amount: bigint,
-  ): Promise<Hash> {
+  ): Promise<WriteResult> {
     return this.approveToken(walletClient, token, this._vaultAddress(tranche), amount);
   }
 

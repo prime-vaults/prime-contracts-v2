@@ -218,12 +218,19 @@ contract RedemptionPolicy is Ownable2Step {
         return CooldownMechanism.SHARES_LOCK;
     }
 
-    /** @dev Junior mechanism: instant if cm>instantCm && cs>instantCs, asset lock if cm>assetLockCm && cs>assetLockCs, else share lock. */
+    /** @dev Junior mechanism: evaluate cs and cm independently, return the most restrictive (highest priority). */
     function _evaluateJuniorMechanism(uint256 cs, uint256 cm) internal view returns (CooldownMechanism) {
         JuniorParams memory p = s_juniorParams;
-        if (cm > p.instantCm && cs > p.instantCs) return CooldownMechanism.NONE;
-        if (cm > p.assetLockCm && cs > p.assetLockCs) return CooldownMechanism.ASSETS_LOCK;
-        return CooldownMechanism.SHARES_LOCK;
+
+        CooldownMechanism csMech = cs > p.instantCs ? CooldownMechanism.NONE : cs > p.assetLockCs
+            ? CooldownMechanism.ASSETS_LOCK
+            : CooldownMechanism.SHARES_LOCK;
+
+        CooldownMechanism cmMech = cm > p.instantCm ? CooldownMechanism.NONE : cm > p.assetLockCm
+            ? CooldownMechanism.ASSETS_LOCK
+            : CooldownMechanism.SHARES_LOCK;
+
+        return csMech > cmMech ? csMech : cmMech;
     }
 
     /** @dev Build PolicyResult from mechanism + per-tranche config. */

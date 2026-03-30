@@ -170,7 +170,7 @@ async function main() {
 
       // Deposit ~$1 with 20% WETH ratio: $0.80 USDai + ~$0.20 WETH
       const baseAmt = 8n * E18 / 10n; // 0.8 USDai
-      const wethPrice = await (await hre.ethers.getContractAt("IWETHPriceOracle", d.wethPriceOracle)).getWETHPrice();
+      const wethPrice = await (await hre.ethers.getContractAt("IWETHPriceOracle", d.wethPriceOracle)).getSpotPrice();
       const wethValueTarget = 2n * E18 / 10n; // $0.20
       const wethAmt = (wethValueTarget * E18) / wethPrice;
 

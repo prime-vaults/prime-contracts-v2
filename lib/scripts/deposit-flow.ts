@@ -13,14 +13,7 @@
  *   --dry-run  Preview only, no tx sent (default: false)
  */
 
-import {
-  createWalletClient,
-  createPublicClient,
-  http,
-  parseUnits,
-  formatUnits,
-  type Hash,
-} from "viem";
+import { createWalletClient, createPublicClient, http, parseUnits, formatUnits, type Hash, formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
 import { PrimeVaultsSDK } from "../PrimeVaultsSDK";
@@ -48,7 +41,7 @@ const WETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
 function parseArgs() {
   const args = process.argv.slice(2);
   let tranche: TrancheId = "SENIOR";
-  let amount = "1";
+  let amount = "0.1";
   let dryRun = false;
 
   for (let i = 0; i < args.length; i++) {
@@ -127,9 +120,8 @@ async function main() {
   //  2. Check current allowance
   // ─────────────────────────────────────────────────────────────────
 
-  const vaultAddr = tranche === "SENIOR" ? DEPLOYED.seniorVault
-    : tranche === "MEZZ" ? DEPLOYED.mezzVault
-    : DEPLOYED.juniorVault;
+  const vaultAddr =
+    tranche === "SENIOR" ? DEPLOYED.seniorVault : tranche === "MEZZ" ? DEPLOYED.mezzVault : DEPLOYED.juniorVault;
 
   const currentAllowance = await sdk.getTokenAllowance(USDAI, user, vaultAddr);
   console.log(`  Current allowance: ${formatUnits(currentAllowance, 18)}`);
@@ -174,8 +166,9 @@ async function main() {
 
   if (currentAllowance < depositAmount) {
     console.log(`\n  Approving ${amount} USD.AI for ${tranche} vault...`);
-    const approveTx = await sdk.approveVaultDeposit(walletClient, tranche, USDAI, depositAmount);
-    await waitForTx(publicClient, approveTx, "Approve");
+    const approveResult = await sdk.approveVaultDeposit(walletClient, tranche, USDAI, depositAmount);
+    console.log(`  Gas: ${approveResult.gasEstimate} units | Fee: ~${formatEther(approveResult.estimatedFeeWei)} ETH`);
+    await waitForTx(publicClient, approveResult.hash as Hash, "Approve");
   } else {
     console.log(`\n  Allowance sufficient, skipping approve.`);
   }
@@ -185,8 +178,9 @@ async function main() {
   // ─────────────────────────────────────────────────────────────────
 
   console.log(`  Depositing ${amount} USD.AI into ${tranche}...`);
-  const depositTx = await sdk.deposit(walletClient, tranche, depositAmount, user);
-  await waitForTx(publicClient, depositTx, "Deposit");
+  const depositResult = await sdk.deposit(walletClient, tranche, depositAmount, user);
+  console.log(`  Gas: ${depositResult.gasEstimate} units | Fee: ~${formatEther(depositResult.estimatedFeeWei)} ETH`);
+  await waitForTx(publicClient, depositResult.hash as Hash, "Deposit");
 
   // ─────────────────────────────────────────────────────────────────
   //  8. Verify shares after
