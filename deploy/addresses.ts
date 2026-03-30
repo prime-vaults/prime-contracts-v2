@@ -49,6 +49,8 @@ export interface DeployedAddresses {
   seniorVault: string;
   mezzVault: string;
   juniorVault: string;
+  // Periphery (04)
+  primeLens: string;
 }
 
 export function loadDeployed(): DeployedAddresses {

@@ -468,7 +468,10 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
      *      User benefits from yield accrued during cooldown (shares appreciated).
      *      Callable by anyone.
      */
-    function claimSharesWithdraw(uint256 cooldownId, address outputToken) external override returns (uint256 amountOut) {
+    function claimSharesWithdraw(
+        uint256 cooldownId,
+        address outputToken
+    ) external override returns (uint256 amountOut) {
         // 1. Claim shares from SharesCooldown → shares come back to this CDO
         CooldownRequest memory req = i_sharesCooldown.getRequest(cooldownId);
         uint256 sharesReturned = i_sharesCooldown.claim(cooldownId);

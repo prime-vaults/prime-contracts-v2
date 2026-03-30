@@ -16,7 +16,10 @@
       "Bash(ARB_RPC_URL=https://arb1.arbitrum.io/rpc npx hardhat test test/integration/FullFlow.test.ts)",
       "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); print\\(json.dumps\\(data[''''abi''''], indent=2\\)\\)\")",
       "Bash(pnpm build:*)",
-      "Bash(npx tsup:*)"
+      "Bash(npx tsup:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsx:*)",
+      "Bash(ls:*)"
     ]
   }
 }

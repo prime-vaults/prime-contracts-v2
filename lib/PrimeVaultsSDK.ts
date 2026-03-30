@@ -454,6 +454,44 @@ export class PrimeVaultsSDK {
   }
 
   // ═══════════════════════════════════════════════════════════════════
+  //  READ — Estimate helpers
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Estimate the WETH amount needed for a Junior deposit given a base asset amount.
+   * Uses the on-chain target ratio and WETH price.
+   *
+   * Formula: wethAmount = (baseAmount * targetRatio) / ((1 - targetRatio) * wethPrice)
+   *
+   * @param baseAmount The base asset (USD.AI) amount to deposit (18 decimals)
+   * @returns { wethAmount, wethPrice, targetRatio, wethValueUSD }
+   */
+  async estimateWETHAmount(baseAmount: bigint): Promise<{
+    wethAmount: bigint;
+    wethPrice: bigint;
+    targetRatio: bigint;
+    wethValueUSD: bigint;
+  }> {
+    const PRECISION = 1_000_000_000_000_000_000n; // 1e18
+
+    const [rebalance, juniorPos] = await Promise.all([
+      this.getWETHRebalanceStatus(),
+      this.getJuniorPosition(),
+    ]);
+
+    const targetRatio = rebalance.targetRatio;   // e.g. 0.20e18 = 20%
+    const wethPrice = juniorPos.wethPrice;        // 18 decimals
+
+    // wethValueUSD = baseAmount * targetRatio / (1e18 - targetRatio)
+    const wethValueUSD = (baseAmount * targetRatio) / (PRECISION - targetRatio);
+
+    // wethAmount = wethValueUSD * 1e18 / wethPrice
+    const wethAmount = (wethValueUSD * PRECISION) / wethPrice;
+
+    return { wethAmount, wethPrice, targetRatio, wethValueUSD };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
   //  UTILS — Format helpers
   // ═══════════════════════════════════════════════════════════════════
 
