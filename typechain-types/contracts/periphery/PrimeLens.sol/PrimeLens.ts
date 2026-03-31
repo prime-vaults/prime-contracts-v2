@@ -57,7 +57,6 @@ export declare namespace PrimeLens {
     token: AddressLike;
     amount: BigNumberish;
     unlockTime: BigNumberish;
-    expiryTime: BigNumberish;
     status: BigNumberish;
     isClaimable: boolean;
     timeRemaining: BigNumberish;
@@ -70,7 +69,6 @@ export declare namespace PrimeLens {
     token: string,
     amount: bigint,
     unlockTime: bigint,
-    expiryTime: bigint,
     status: bigint,
     isClaimable: boolean,
     timeRemaining: bigint
@@ -81,7 +79,6 @@ export declare namespace PrimeLens {
     token: string;
     amount: bigint;
     unlockTime: bigint;
-    expiryTime: bigint;
     status: bigint;
     isClaimable: boolean;
     timeRemaining: bigint;

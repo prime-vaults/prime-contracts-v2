@@ -33,3 +33,6 @@ ignition/deployments/
 # SDK lib build output
 lib/node_modules
 lib/dist
+
+.claude
+CLAUDE.md

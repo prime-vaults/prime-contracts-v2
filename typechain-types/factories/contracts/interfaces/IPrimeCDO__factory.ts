@@ -29,11 +29,6 @@ const _abi = [
         name: "cooldownId",
         type: "uint256",
       },
-      {
-        internalType: "address",
-        name: "outputToken",
-        type: "address",
-      },
     ],
     name: "claimSharesWithdraw",
     outputs: [
@@ -167,11 +162,6 @@ const _abi = [
       },
       {
         internalType: "address",
-        name: "outputToken",
-        type: "address",
-      },
-      {
-        internalType: "address",
         name: "beneficiary",
         type: "address",
       },
@@ -216,9 +206,19 @@ const _abi = [
             type: "uint256",
           },
           {
-            internalType: "uint8",
+            internalType: "enum CooldownType",
             name: "appliedCooldownType",
             type: "uint8",
+          },
+          {
+            internalType: "uint256",
+            name: "wethAmount",
+            type: "uint256",
+          },
+          {
+            internalType: "uint256",
+            name: "wethCooldownId",
+            type: "uint256",
           },
         ],
         internalType: "struct CDOWithdrawResult",
@@ -248,11 +248,6 @@ const _abi = [
         internalType: "uint256",
         name: "baseAmount",
         type: "uint256",
-      },
-      {
-        internalType: "address",
-        name: "outputToken",
-        type: "address",
       },
       {
         internalType: "address",
@@ -305,9 +300,19 @@ const _abi = [
             type: "uint256",
           },
           {
-            internalType: "uint8",
+            internalType: "enum CooldownType",
             name: "appliedCooldownType",
             type: "uint8",
+          },
+          {
+            internalType: "uint256",
+            name: "wethAmount",
+            type: "uint256",
+          },
+          {
+            internalType: "uint256",
+            name: "wethCooldownId",
+            type: "uint256",
           },
         ],
         internalType: "struct CDOWithdrawResult",

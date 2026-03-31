@@ -122,7 +122,6 @@ contract PrimeLens {
         address token;
         uint256 amount;
         uint256 unlockTime;
-        uint256 expiryTime;
         CooldownStatus status;
         bool isClaimable;
         uint256 timeRemaining;
@@ -405,7 +404,6 @@ contract PrimeLens {
         pw.token = req.token;
         pw.amount = req.amount;
         pw.unlockTime = req.unlockTime;
-        pw.expiryTime = req.expiryTime;
         pw.status = req.status;
         pw.isClaimable = _safeIsClaimable(handler, requestId);
         pw.timeRemaining = handler.timeRemaining(requestId);

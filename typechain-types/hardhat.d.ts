@@ -106,13 +106,13 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SharesCooldown__factory>;
     getContractFactory(
-      name: "UnstakeCooldown",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.UnstakeCooldown__factory>;
-    getContractFactory(
       name: "Accounting",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Accounting__factory>;
+    getContractFactory(
+      name: "ITrancheVaultBurn",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ITrancheVaultBurn__factory>;
     getContractFactory(
       name: "PrimeCDO",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -150,10 +150,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ICooldownHandler__factory>;
     getContractFactory(
-      name: "ICooldownRequestImpl",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ICooldownRequestImpl__factory>;
-    getContractFactory(
       name: "IPrimeCDO",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IPrimeCDO__factory>;
@@ -161,10 +157,6 @@ declare module "hardhat/types/runtime" {
       name: "IRatioController",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IRatioController__factory>;
-    getContractFactory(
-      name: "IStakedUSDai",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IStakedUSDai__factory>;
     getContractFactory(
       name: "IStrategy",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -233,10 +225,6 @@ declare module "hardhat/types/runtime" {
       name: "BaseStrategy",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.BaseStrategy__factory>;
-    getContractFactory(
-      name: "SUSDaiCooldownRequestImpl",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.SUSDaiCooldownRequestImpl__factory>;
     getContractFactory(
       name: "IStakedUSDai",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -414,15 +402,15 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.SharesCooldown>;
     getContractAt(
-      name: "UnstakeCooldown",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.UnstakeCooldown>;
-    getContractAt(
       name: "Accounting",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.Accounting>;
+    getContractAt(
+      name: "ITrancheVaultBurn",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ITrancheVaultBurn>;
     getContractAt(
       name: "PrimeCDO",
       address: string | ethers.Addressable,
@@ -469,11 +457,6 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ICooldownHandler>;
     getContractAt(
-      name: "ICooldownRequestImpl",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.ICooldownRequestImpl>;
-    getContractAt(
       name: "IPrimeCDO",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -483,11 +466,6 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IRatioController>;
-    getContractAt(
-      name: "IStakedUSDai",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.IStakedUSDai>;
     getContractAt(
       name: "IStrategy",
       address: string | ethers.Addressable,
@@ -573,11 +551,6 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.BaseStrategy>;
-    getContractAt(
-      name: "SUSDaiCooldownRequestImpl",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.SUSDaiCooldownRequestImpl>;
     getContractAt(
       name: "IStakedUSDai",
       address: string | ethers.Addressable,
@@ -747,13 +720,13 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SharesCooldown>;
     deployContract(
-      name: "UnstakeCooldown",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.UnstakeCooldown>;
-    deployContract(
       name: "Accounting",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Accounting>;
+    deployContract(
+      name: "ITrancheVaultBurn",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITrancheVaultBurn>;
     deployContract(
       name: "PrimeCDO",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -791,10 +764,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ICooldownHandler>;
     deployContract(
-      name: "ICooldownRequestImpl",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ICooldownRequestImpl>;
-    deployContract(
       name: "IPrimeCDO",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IPrimeCDO>;
@@ -802,10 +771,6 @@ declare module "hardhat/types/runtime" {
       name: "IRatioController",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IRatioController>;
-    deployContract(
-      name: "IStakedUSDai",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IStakedUSDai>;
     deployContract(
       name: "IStrategy",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -874,10 +839,6 @@ declare module "hardhat/types/runtime" {
       name: "BaseStrategy",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.BaseStrategy>;
-    deployContract(
-      name: "SUSDaiCooldownRequestImpl",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SUSDaiCooldownRequestImpl>;
     deployContract(
       name: "IStakedUSDai",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -1055,15 +1016,15 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SharesCooldown>;
     deployContract(
-      name: "UnstakeCooldown",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.UnstakeCooldown>;
-    deployContract(
       name: "Accounting",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Accounting>;
+    deployContract(
+      name: "ITrancheVaultBurn",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ITrancheVaultBurn>;
     deployContract(
       name: "PrimeCDO",
       args: any[],
@@ -1110,11 +1071,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ICooldownHandler>;
     deployContract(
-      name: "ICooldownRequestImpl",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.ICooldownRequestImpl>;
-    deployContract(
       name: "IPrimeCDO",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -1124,11 +1080,6 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IRatioController>;
-    deployContract(
-      name: "IStakedUSDai",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IStakedUSDai>;
     deployContract(
       name: "IStrategy",
       args: any[],
@@ -1214,11 +1165,6 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.BaseStrategy>;
-    deployContract(
-      name: "SUSDaiCooldownRequestImpl",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SUSDaiCooldownRequestImpl>;
     deployContract(
       name: "IStakedUSDai",
       args: any[],

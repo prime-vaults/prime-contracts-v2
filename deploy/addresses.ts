@@ -19,7 +19,6 @@ export const DEFAULTS = {
   MIN_COVERAGE_DEPOSIT: BigInt("1050000000000000000"), // 1.05e18 = 105%
   SHORTFALL_PAUSE_PRICE: BigInt("900000000000000000"), // 0.90e18 = 90%
   ERC20_COOLDOWN_DURATION: 3 * 86_400, // 3 days
-  ERC20_COOLDOWN_EXPIRY: 3 * 86_400, // 3 days
   SHARES_COOLDOWN_DURATION: 7 * 86_400, // 7 days
   APR_STALE_AFTER: 30 * 86_400, // 30 days
   SWAP_MAX_SLIPPAGE: 100, // 1%
@@ -35,21 +34,19 @@ export interface DeployedAddresses {
   wethPriceOracle: string;
   swapFacility: string;
   erc20Cooldown: string;
-  unstakeCooldown: string;
   sharesCooldown: string;
   // Market (02)
   aprProvider: string;
   aprFeed: string;
   accounting: string;
   strategy: string;
-  cooldownImpl: string;
   aaveAdapter: string;
   redemptionPolicy: string;
   primeCDO: string;
   seniorVault: string;
   mezzVault: string;
   juniorVault: string;
-  // Periphery (04)
+  // Periphery (03)
   primeLens: string;
 }
 
@@ -57,7 +54,7 @@ export function loadDeployed(): DeployedAddresses {
   try {
     return require("./deployed.json");
   } catch {
-    throw new Error("deployed.json not found — run 01 and 02 first");
+    throw new Error("deployed.json not found — run deploy scripts first");
   }
 }
 

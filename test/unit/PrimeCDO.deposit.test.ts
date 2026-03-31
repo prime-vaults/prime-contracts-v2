@@ -87,7 +87,7 @@ describe("PrimeCDO — Deposits (per-tranche coverage)", () => {
       await accounting.getAddress(), await strategy.getAddress(),
       await adapter.getAddress(), await oracle.getAddress(), ethers.ZeroAddress,
       await mockWeth.getAddress(),
-      ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, owner.address,
+      ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, await mockSUSDai.getAddress(), owner.address,
     );
 
     await accounting.setCDO(await cdo.getAddress());

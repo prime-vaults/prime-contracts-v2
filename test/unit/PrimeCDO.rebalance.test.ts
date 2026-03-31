@@ -106,7 +106,7 @@ describe("PrimeCDO — Rebalance (Asymmetric)", () => {
       await accounting.getAddress(), await strategy.getAddress(),
       await adapter.getAddress(), await oracle.getAddress(), await swap.getAddress(),
       await mockWeth.getAddress(),
-      ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, owner.address,
+      ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, owner.address,
     );
 
     // --- Wire up ---

@@ -2,4 +2,3 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as susDaiStrategySol from "./SUSDaiStrategy.sol";
-export * as cooldown from "./cooldown";

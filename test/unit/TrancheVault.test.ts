@@ -105,7 +105,7 @@ describe("TrancheVault — ERC-4626", () => {
       await adapter.getAddress(), await oracle.getAddress(), ethers.ZeroAddress,
       await mockWeth.getAddress(),
       await redemptionPolicy.getAddress(), await erc20Cooldown.getAddress(),
-      await sharesCooldown.getAddress(), owner.address,
+      await sharesCooldown.getAddress(), await mockUSDai.getAddress(), owner.address,
     );
 
     // --- Deploy 3 TrancheVaults ---
@@ -287,7 +287,7 @@ describe("TrancheVault — ERC-4626", () => {
       const sharesToRedeem = 2_000n * E18;
 
       await seniorVault.connect(alice).requestWithdraw(
-        sharesToRedeem, await mockUSDai.getAddress(), alice.address,
+        sharesToRedeem, alice.address,
       );
 
       const sharesAfter = await seniorVault.balanceOf(alice.address);
@@ -297,21 +297,21 @@ describe("TrancheVault — ERC-4626", () => {
     it("should emit WithdrawRequested event", async () => {
       await expect(
         seniorVault.connect(alice).requestWithdraw(
-          1_000n * E18, await mockUSDai.getAddress(), alice.address,
+          1_000n * E18, alice.address,
         ),
       ).to.emit(seniorVault, "WithdrawRequested");
     });
 
     it("should revert with zero shares", async () => {
       await expect(
-        seniorVault.connect(alice).requestWithdraw(0, await mockUSDai.getAddress(), alice.address),
+        seniorVault.connect(alice).requestWithdraw(0, alice.address),
       ).to.be.revertedWithCustomError(seniorVault, "PrimeVaults__ZeroShares");
     });
 
     it("should revert if caller has insufficient shares", async () => {
       await expect(
         seniorVault.connect(bob).requestWithdraw(
-          1_000n * E18, await mockUSDai.getAddress(), bob.address,
+          1_000n * E18, bob.address,
         ),
       ).to.be.reverted; // ERC20 insufficient balance
     });
@@ -380,7 +380,7 @@ describe("TrancheVault — ERC-4626", () => {
 
       // Alice withdraws 5K worth of shares
       await seniorVault.connect(alice).requestWithdraw(
-        5_000n * E18, await mockUSDai.getAddress(), alice.address,
+        5_000n * E18, alice.address,
       );
 
       const priceAfter = await seniorVault.convertToAssets(E18);

@@ -11,7 +11,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
-import { IPrimeCDO, TrancheId, CDOWithdrawResult } from "../interfaces/IPrimeCDO.sol";
+import { IPrimeCDO, TrancheId, CooldownType, CDOWithdrawResult } from "../interfaces/IPrimeCDO.sol";
 import { IAccounting } from "../interfaces/IAccounting.sol";
 import { IStrategy, WithdrawResult, WithdrawType } from "../interfaces/IStrategy.sol";
 import { IAaveWETHAdapter } from "../interfaces/IAaveWETHAdapter.sol";
@@ -20,6 +20,11 @@ import { ISwapFacility } from "../interfaces/ISwapFacility.sol";
 import { IRatioController } from "../interfaces/IRatioController.sol";
 import { ICooldownHandler, CooldownRequest } from "../interfaces/ICooldownHandler.sol";
 import { RedemptionPolicy } from "../cooldown/RedemptionPolicy.sol";
+
+/** @dev Minimal interface to burn shares on TrancheVault after SHARES_LOCK claim. */
+interface ITrancheVaultBurn {
+    function burnSharesFrom(address account, uint256 shares) external;
+}
 
 /**
  * @title PrimeCDO
@@ -51,6 +56,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     RedemptionPolicy public immutable i_redemptionPolicy;
     ICooldownHandler public immutable i_erc20Cooldown;
     ICooldownHandler public immutable i_sharesCooldown;
+    address public immutable i_outputToken;
 
     // ═══════════════════════════════════════════════════════════════════
     //  STATE — Tranches
@@ -126,6 +132,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         address redemptionPolicy_,
         address erc20Cooldown_,
         address sharesCooldown_,
+        address outputToken_,
         address owner_
     ) Ownable(owner_) {
         i_accounting = IAccounting(accounting_);
@@ -137,6 +144,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         i_redemptionPolicy = RedemptionPolicy(redemptionPolicy_);
         i_erc20Cooldown = ICooldownHandler(erc20Cooldown_);
         i_sharesCooldown = ICooldownHandler(sharesCooldown_);
+        i_outputToken = outputToken_;
 
         // Defaults
         s_ratioTarget = 0.20e18; //20%
@@ -270,7 +278,6 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     function requestWithdraw(
         TrancheId tranche,
         uint256 baseAmount,
-        address outputToken,
         address beneficiary,
         uint256 vaultShares
     ) external override onlyTranche(tranche) whenNotShortfallPaused returns (CDOWithdrawResult memory result) {
@@ -285,9 +292,9 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
 
         // Route to mechanism
         if (policy.mechanism == RedemptionPolicy.CooldownMechanism.NONE) {
-            result = _withdrawInstant(tranche, netAmount, outputToken, beneficiary, feeAmount);
+            result = _withdrawInstant(tranche, netAmount, beneficiary, feeAmount);
         } else if (policy.mechanism == RedemptionPolicy.CooldownMechanism.ASSETS_LOCK) {
-            result = _withdrawAssetsLock(tranche, netAmount, outputToken, beneficiary, feeAmount);
+            result = _withdrawAssetsLock(tranche, netAmount, beneficiary, feeAmount);
         } else {
             result = _withdrawSharesLock(tranche, beneficiary, vaultShares, feeAmount);
         }
@@ -297,16 +304,16 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
 
     /**
      * @dev NONE mechanism: withdraw from strategy directly to beneficiary.
+     *      Always withdraws sUSDai (i_outputToken) — instant transfer from strategy.
      *      Senior: always. Mezz: cs > 160%. Junior: cs > 160% AND cm > 150%.
      */
     function _withdrawInstant(
         TrancheId tranche,
         uint256 netAmount,
-        address outputToken,
         address beneficiary,
         uint256 feeAmount
     ) internal returns (CDOWithdrawResult memory) {
-        WithdrawResult memory wr = i_strategy.withdraw(netAmount, outputToken, beneficiary);
+        WithdrawResult memory wr = i_strategy.withdraw(netAmount, i_outputToken, beneficiary);
         i_accounting.recordWithdraw(tranche, netAmount);
 
         return
@@ -317,53 +324,42 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
                 cooldownHandler: address(0),
                 unlockTime: 0,
                 feeAmount: feeAmount,
-                appliedCooldownType: 0
+                appliedCooldownType: CooldownType.NONE,
+                wethAmount: 0,
+                wethCooldownId: 0
             });
     }
 
     /**
-     * @dev ASSETS_LOCK mechanism: withdraw from strategy to CDO, then lock in ERC20Cooldown.
-     *      If strategy returns UNSTAKE instead (external cooldown), pass through.
+     * @dev ASSETS_LOCK mechanism: withdraw sUSDai from strategy to CDO, then lock in ERC20Cooldown.
+     *      Always uses i_outputToken (sUSDai) — strategy returns INSTANT.
      *      Mezz: 140% < cs ≤ 160%. Junior: cs > 140% AND cm > 130%.
      */
     function _withdrawAssetsLock(
         TrancheId tranche,
         uint256 netAmount,
-        address outputToken,
         address beneficiary,
         uint256 feeAmount
     ) internal returns (CDOWithdrawResult memory) {
-        // Withdraw to CDO (not beneficiary) so we can lock in cooldown
-        WithdrawResult memory wr = i_strategy.withdraw(netAmount, outputToken, address(this));
+        // Withdraw sUSDai to CDO (not beneficiary) so we can lock in cooldown
+        WithdrawResult memory wr = i_strategy.withdraw(netAmount, i_outputToken, address(this));
         i_accounting.recordWithdraw(tranche, netAmount);
 
-        if (wr.wType == WithdrawType.INSTANT) {
-            // Strategy returned tokens to CDO → lock in ERC20Cooldown
-            IERC20(outputToken).forceApprove(address(i_erc20Cooldown), wr.amountOut);
-            uint256 requestId = i_erc20Cooldown.request(beneficiary, outputToken, wr.amountOut);
+        // Strategy returned sUSDai to CDO → lock in ERC20Cooldown
+        IERC20(i_outputToken).forceApprove(address(i_erc20Cooldown), wr.amountOut);
+        uint256 requestId = i_erc20Cooldown.request(beneficiary, i_outputToken, wr.amountOut);
 
-            return
-                CDOWithdrawResult({
-                    isInstant: false,
-                    amountOut: 0,
-                    cooldownId: requestId,
-                    cooldownHandler: address(i_erc20Cooldown),
-                    unlockTime: 0,
-                    feeAmount: feeAmount,
-                    appliedCooldownType: 1
-                });
-        }
-
-        // Strategy initiated external cooldown (UNSTAKE) — pass through
         return
             CDOWithdrawResult({
                 isInstant: false,
                 amountOut: 0,
-                cooldownId: wr.cooldownId,
-                cooldownHandler: wr.cooldownHandler,
-                unlockTime: wr.unlockTime,
+                cooldownId: requestId,
+                cooldownHandler: address(i_erc20Cooldown),
+                unlockTime: 0,
                 feeAmount: feeAmount,
-                appliedCooldownType: 2
+                appliedCooldownType: CooldownType.ASSETS_LOCK,
+                wethAmount: 0,
+                wethCooldownId: 0
             });
     }
 
@@ -393,7 +389,9 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
                 cooldownHandler: address(i_sharesCooldown),
                 unlockTime: 0,
                 feeAmount: feeAmount,
-                appliedCooldownType: 3
+                appliedCooldownType: CooldownType.SHARES_LOCK,
+                wethAmount: 0,
+                wethCooldownId: 0
             });
     }
 
@@ -409,7 +407,6 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
      */
     function withdrawJunior(
         uint256 baseAmount,
-        address outputToken,
         address beneficiary,
         uint256 vaultShares,
         uint256 totalJuniorShares
@@ -418,30 +415,49 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
 
         _updateAccounting();
 
-        // Proportional WETH: always instant from Aave
+        // Compute proportional WETH
+        uint256 userWeth = 0;
         if (totalJuniorShares > 0) {
             uint256 totalWeth = i_aaveWETHAdapter.totalAssets();
-            uint256 userWeth = (totalWeth * vaultShares) / totalJuniorShares;
+            userWeth = (totalWeth * vaultShares) / totalJuniorShares;
+        }
+
+        // Evaluate mechanism + fee
+        RedemptionPolicy.PolicyResult memory policy = i_redemptionPolicy.evaluate(TrancheId.JUNIOR);
+        uint256 feeAmount = baseAmount > 0 ? (baseAmount * policy.feeBps) / 10_000 : 0;
+        uint256 netAmount = baseAmount - feeAmount;
+        if (feeAmount > 0) i_accounting.recordFee(TrancheId.JUNIOR, feeAmount);
+
+        if (policy.mechanism == RedemptionPolicy.CooldownMechanism.NONE) {
+            // INSTANT: both WETH + sUSDai sent directly to beneficiary
             if (userWeth > 0) {
                 i_aaveWETHAdapter.withdraw(userWeth, beneficiary);
                 i_accounting.setJuniorWethTVL(i_aaveWETHAdapter.totalAssetsUSD());
             }
-        }
-
-        // Base portion: route through RedemptionPolicy mechanism
-        if (baseAmount > 0) {
-            RedemptionPolicy.PolicyResult memory policy = i_redemptionPolicy.evaluate(TrancheId.JUNIOR);
-            uint256 feeAmount = (baseAmount * policy.feeBps) / 10_000;
-            uint256 netAmount = baseAmount - feeAmount;
-            if (feeAmount > 0) i_accounting.recordFee(TrancheId.JUNIOR, feeAmount);
-
-            if (policy.mechanism == RedemptionPolicy.CooldownMechanism.NONE) {
-                result = _withdrawInstant(TrancheId.JUNIOR, netAmount, outputToken, beneficiary, feeAmount);
-            } else if (policy.mechanism == RedemptionPolicy.CooldownMechanism.ASSETS_LOCK) {
-                result = _withdrawAssetsLock(TrancheId.JUNIOR, netAmount, outputToken, beneficiary, feeAmount);
-            } else {
-                result = _withdrawSharesLock(TrancheId.JUNIOR, beneficiary, vaultShares, feeAmount);
+            if (netAmount > 0) {
+                result = _withdrawInstant(TrancheId.JUNIOR, netAmount, beneficiary, feeAmount);
             }
+            result.wethAmount = userWeth;
+
+        } else if (policy.mechanism == RedemptionPolicy.CooldownMechanism.ASSETS_LOCK) {
+            // ASSETS_LOCK: both WETH + sUSDai locked in ERC20Cooldown
+            uint256 wethCooldownId = 0;
+            if (userWeth > 0) {
+                i_aaveWETHAdapter.withdraw(userWeth, address(this));
+                i_accounting.setJuniorWethTVL(i_aaveWETHAdapter.totalAssetsUSD());
+                IERC20(i_weth).forceApprove(address(i_erc20Cooldown), userWeth);
+                wethCooldownId = i_erc20Cooldown.request(beneficiary, i_weth, userWeth);
+            }
+            if (netAmount > 0) {
+                result = _withdrawAssetsLock(TrancheId.JUNIOR, netAmount, beneficiary, feeAmount);
+            }
+            result.wethAmount = userWeth;
+            result.wethCooldownId = wethCooldownId;
+
+        } else {
+            // SHARES_LOCK: shares escrowed — WETH stays in Aave (accrues yield)
+            result = _withdrawSharesLock(TrancheId.JUNIOR, beneficiary, vaultShares, feeAmount);
+            result.wethAmount = userWeth; // informational: how much WETH is locked via shares
         }
 
         _checkJuniorShortfall();
@@ -469,8 +485,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
      *      Callable by anyone.
      */
     function claimSharesWithdraw(
-        uint256 cooldownId,
-        address outputToken
+        uint256 cooldownId
     ) external override returns (uint256 amountOut) {
         // 1. Claim shares from SharesCooldown → shares come back to this CDO
         CooldownRequest memory req = i_sharesCooldown.getRequest(cooldownId);
@@ -480,17 +495,32 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         address vault = req.token;
         TrancheId tranche = s_vaultToTranche[vault];
 
-        // 3. Compute base value of shares at current exchange rate
-        //    baseAmount = shares × trancheTVL / totalSupply
         _updateAccounting();
-        uint256 trancheTVL = i_accounting.getTrancheTVL(tranche);
         uint256 totalSupply = IERC20(vault).totalSupply();
-        uint256 baseAmount = (sharesReturned * trancheTVL) / totalSupply;
 
-        // 4. Record withdraw and withdraw from strategy to beneficiary
+        // 3. Junior: also withdraw proportional WETH (was locked via shares during escrow)
+        if (tranche == TrancheId.JUNIOR) {
+            uint256 totalWeth = i_aaveWETHAdapter.totalAssets();
+            uint256 userWeth = totalSupply > 0 ? (totalWeth * sharesReturned) / totalSupply : 0;
+            if (userWeth > 0) {
+                i_aaveWETHAdapter.withdraw(userWeth, req.beneficiary);
+                i_accounting.setJuniorWethTVL(i_aaveWETHAdapter.totalAssetsUSD());
+            }
+        }
+
+        // 4. Compute base value of shares at current exchange rate
+        uint256 baseTVL = tranche == TrancheId.JUNIOR
+            ? i_accounting.getJuniorBaseTVL()
+            : i_accounting.getTrancheTVL(tranche);
+        uint256 baseAmount = totalSupply > 0 ? (sharesReturned * baseTVL) / totalSupply : 0;
+
+        // 5. Record withdraw and withdraw from strategy to beneficiary
         i_accounting.recordWithdraw(tranche, baseAmount);
-        WithdrawResult memory wr = i_strategy.withdraw(baseAmount, outputToken, req.beneficiary);
+        WithdrawResult memory wr = i_strategy.withdraw(baseAmount, i_outputToken, req.beneficiary);
         amountOut = wr.amountOut;
+
+        // 6. Burn the returned shares (were escrowed, not burned at request time)
+        ITrancheVaultBurn(vault).burnSharesFrom(address(this), sharesReturned);
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -14,6 +14,13 @@ enum TrancheId {
     JUNIOR
 }
 
+/** @notice Cooldown mechanism applied to a withdrawal */
+enum CooldownType {
+    NONE,         // 0 — instant withdrawal
+    ASSETS_LOCK,  // 1 — sUSDai/WETH locked in ERC20Cooldown
+    SHARES_LOCK   // 2 — vault shares escrowed in SharesCooldown
+}
+
 /** @notice Result returned by CDO withdrawal operations */
 struct CDOWithdrawResult {
     bool isInstant;
@@ -22,7 +29,9 @@ struct CDOWithdrawResult {
     address cooldownHandler;
     uint256 unlockTime;
     uint256 feeAmount;
-    uint8 appliedCooldownType;
+    CooldownType appliedCooldownType;
+    uint256 wethAmount;
+    uint256 wethCooldownId;
 }
 
 /**
@@ -70,29 +79,29 @@ interface IPrimeCDO {
      * @notice Request withdrawal from a Senior or Mezzanine tranche
      * @dev Only callable by the registered TrancheVault. Queries RedemptionPolicy for
      *      cooldown type, applies fees if any, routes through appropriate cooldown handler.
+     *      Always withdraws the underlying yield token (sUSDai) — no outputToken selection.
      *      See docs/PV_V3_COVERAGE_GATE.md for coverage-dependent mechanism selection.
      * @param tranche Tranche to withdraw from (SENIOR or MEZZ)
      * @param baseAmount Base-equivalent amount to withdraw
-     * @param outputToken Desired output token
      * @param beneficiary Address that will receive withdrawn tokens
      * @param vaultShares Vault shares being redeemed (for SharesLock accounting)
      * @return result Struct with withdrawal outcome, cooldown details, and fees
      */
-    function requestWithdraw(TrancheId tranche, uint256 baseAmount, address outputToken, address beneficiary, uint256 vaultShares) external returns (CDOWithdrawResult memory result);
+    function requestWithdraw(TrancheId tranche, uint256 baseAmount, address beneficiary, uint256 vaultShares) external returns (CDOWithdrawResult memory result);
 
     /**
      * @notice Withdraw from Junior tranche (proportional base + WETH)
      * @dev Only callable by the Junior TrancheVault. WETH portion is always instant
      *      (withdrawn from Aave). Base portion goes through cooldown flow.
+     *      Always withdraws the underlying yield token (sUSDai) — no outputToken selection.
      *      See docs/PV_V3_FINAL_v34.md section 42 for Junior withdrawal flow.
      * @param baseAmount Base-equivalent amount of the base portion
-     * @param outputToken Desired output token for the base portion
      * @param beneficiary Address that will receive withdrawn tokens
      * @param vaultShares Vault shares being redeemed
      * @param totalJuniorShares Total supply of Junior vault shares (for proportional WETH calc)
      * @return result Struct with withdrawal outcome, cooldown details, and fees
      */
-    function withdrawJunior(uint256 baseAmount, address outputToken, address beneficiary, uint256 vaultShares, uint256 totalJuniorShares) external returns (CDOWithdrawResult memory result);
+    function withdrawJunior(uint256 baseAmount, address beneficiary, uint256 vaultShares, uint256 totalJuniorShares) external returns (CDOWithdrawResult memory result);
 
     /**
      * @notice Claim a completed ERC20Cooldown (ASSETS_LOCK) withdrawal
@@ -108,11 +117,11 @@ interface IPrimeCDO {
      * @dev Callable by anyone. Claims shares from SharesCooldown → CDO receives shares →
      *      CDO converts to base amount at current exchange rate → withdraws from strategy → sends to beneficiary.
      *      User benefits from yield accrued during the cooldown period.
+     *      Always withdraws the underlying yield token (sUSDai).
      * @param cooldownId The SharesCooldown request ID to claim
-     * @param outputToken Desired output token for the withdrawal
-     * @return amountOut Amount of outputToken transferred to the beneficiary
+     * @return amountOut Amount of sUSDai transferred to the beneficiary
      */
-    function claimSharesWithdraw(uint256 cooldownId, address outputToken) external returns (uint256 amountOut);
+    function claimSharesWithdraw(uint256 cooldownId) external returns (uint256 amountOut);
 
     // ═══════════════════════════════════════════════════════════════════
     //  REBALANCE

@@ -4,4 +4,3 @@
 export type { ERC20Cooldown } from "./ERC20Cooldown";
 export type { RedemptionPolicy } from "./RedemptionPolicy";
 export type { SharesCooldown } from "./SharesCooldown";
-export type { UnstakeCooldown } from "./UnstakeCooldown";

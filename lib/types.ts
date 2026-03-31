@@ -11,9 +11,9 @@ export interface ContractAddresses {
   seniorVault: string;
   mezzVault: string;
   juniorVault: string;
-  primeLens?: string;
-  accounting?: string;
-  strategy?: string;
+  primeLens: string;
+  accounting: string;
+  strategy: string;
   aaveAdapter?: string;
   wethPriceOracle?: string;
   swapFacility?: string;
@@ -63,7 +63,6 @@ export interface PendingWithdraw {
   token: string;
   amount: bigint;
   unlockTime: bigint;
-  expiryTime: bigint;
   status: number;
   isClaimable: boolean;
   timeRemaining: bigint;
@@ -89,6 +88,13 @@ export interface RebalanceStatus {
   excessOrDeficitUSD: bigint;
 }
 
+/** @notice Cooldown mechanism applied to a withdrawal (mirrors Solidity enum) */
+export enum CooldownType {
+  NONE = 0, // instant withdrawal
+  ASSETS_LOCK = 1, // sUSDai/WETH locked in ERC20Cooldown
+  SHARES_LOCK = 2, // vault shares escrowed in SharesCooldown
+}
+
 export interface CDOWithdrawResult {
   isInstant: boolean;
   amountOut: bigint;
@@ -96,7 +102,9 @@ export interface CDOWithdrawResult {
   cooldownHandler: string;
   unlockTime: bigint;
   feeAmount: bigint;
-  appliedCooldownType: number;
+  appliedCooldownType: CooldownType;
+  wethAmount: bigint;
+  wethCooldownId: bigint;
 }
 
 export interface EstimateJuniorWithdraw {
@@ -115,6 +123,26 @@ export interface WriteResult {
   gasEstimate: bigint;
   gasPrice: bigint;
   estimatedFeeWei: bigint;
+}
+
+/**
+ * Returned by requestWithdraw — includes tx info + parsed CDOWithdrawResult from event.
+ * FE uses `nextAction` to determine what to show the user next.
+ */
+export interface WithdrawRequestResult extends WriteResult {
+  /** Parsed CDOWithdrawResult from WithdrawRequested event */
+  withdrawResult: CDOWithdrawResult;
+  /** What the FE should do next */
+  nextAction:
+    | { type: "DONE" }
+    | {
+        type: "CLAIM_COOLDOWN";
+        cooldownId: bigint;
+        cooldownHandler: string;
+        unlockTime: bigint;
+        wethCooldownId: bigint;
+      }
+    | { type: "CLAIM_SHARES"; cooldownId: bigint; unlockTime: bigint };
 }
 
 export interface UserPortfolio {

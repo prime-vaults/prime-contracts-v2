@@ -21,7 +21,7 @@ import type {
   TypedLogDescription,
   TypedListener,
   TypedContractMethod,
-} from "../../../../common";
+} from "../../common";
 
 export type WithdrawResultStruct = {
   wType: BigNumberish;
@@ -45,48 +45,26 @@ export type WithdrawResultStructOutput = [
   unlockTime: bigint;
 };
 
-export interface SUSDaiStrategyInterface extends Interface {
+export interface IStrategyInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "acceptOwnership"
       | "baseAsset"
       | "deposit"
       | "depositToken"
       | "emergencyWithdraw"
       | "getCooldownHandlers"
-      | "i_baseAsset"
-      | "i_primeCDO"
-      | "i_sUSDai"
       | "isActive"
       | "name"
-      | "owner"
-      | "pause"
-      | "paused"
-      | "pendingOwner"
       | "predictWithdrawType"
-      | "renounceOwnership"
       | "supportedTokens"
       | "totalAssets"
-      | "transferOwnership"
-      | "unpause"
       | "withdraw"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic:
-      | "Deposited"
-      | "EmergencyWithdrawn"
-      | "OwnershipTransferStarted"
-      | "OwnershipTransferred"
-      | "Paused"
-      | "Unpaused"
-      | "Withdrawn"
+    nameOrSignatureOrTopic: "Deposited" | "EmergencyWithdrawn" | "Withdrawn"
   ): EventFragment;
 
-  encodeFunctionData(
-    functionFragment: "acceptOwnership",
-    values?: undefined
-  ): string;
   encodeFunctionData(functionFragment: "baseAsset", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "deposit",
@@ -104,31 +82,11 @@ export interface SUSDaiStrategyInterface extends Interface {
     functionFragment: "getCooldownHandlers",
     values?: undefined
   ): string;
-  encodeFunctionData(
-    functionFragment: "i_baseAsset",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "i_primeCDO",
-    values?: undefined
-  ): string;
-  encodeFunctionData(functionFragment: "i_sUSDai", values?: undefined): string;
   encodeFunctionData(functionFragment: "isActive", values?: undefined): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
-  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
-  encodeFunctionData(functionFragment: "pause", values?: undefined): string;
-  encodeFunctionData(functionFragment: "paused", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "pendingOwner",
-    values?: undefined
-  ): string;
   encodeFunctionData(
     functionFragment: "predictWithdrawType",
     values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "renounceOwnership",
-    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "supportedTokens",
@@ -139,19 +97,10 @@ export interface SUSDaiStrategyInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "transferOwnership",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(functionFragment: "unpause", values?: undefined): string;
-  encodeFunctionData(
     functionFragment: "withdraw",
     values: [BigNumberish, AddressLike, AddressLike]
   ): string;
 
-  decodeFunctionResult(
-    functionFragment: "acceptOwnership",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "baseAsset", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
   decodeFunctionResult(
@@ -166,27 +115,10 @@ export interface SUSDaiStrategyInterface extends Interface {
     functionFragment: "getCooldownHandlers",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(
-    functionFragment: "i_baseAsset",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "i_primeCDO", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "i_sUSDai", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "isActive", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "pause", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "paused", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "pendingOwner",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "predictWithdrawType",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "renounceOwnership",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -197,11 +129,6 @@ export interface SUSDaiStrategyInterface extends Interface {
     functionFragment: "totalAssets",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(
-    functionFragment: "transferOwnership",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "unpause", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "withdraw", data: BytesLike): Result;
 }
 
@@ -235,56 +162,6 @@ export namespace EmergencyWithdrawnEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace OwnershipTransferStartedEvent {
-  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
-  export type OutputTuple = [previousOwner: string, newOwner: string];
-  export interface OutputObject {
-    previousOwner: string;
-    newOwner: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace OwnershipTransferredEvent {
-  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
-  export type OutputTuple = [previousOwner: string, newOwner: string];
-  export interface OutputObject {
-    previousOwner: string;
-    newOwner: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace PausedEvent {
-  export type InputTuple = [account: AddressLike];
-  export type OutputTuple = [account: string];
-  export interface OutputObject {
-    account: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace UnpausedEvent {
-  export type InputTuple = [account: AddressLike];
-  export type OutputTuple = [account: string];
-  export interface OutputObject {
-    account: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export namespace WithdrawnEvent {
   export type InputTuple = [
     token: AddressLike,
@@ -303,11 +180,11 @@ export namespace WithdrawnEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export interface SUSDaiStrategy extends BaseContract {
-  connect(runner?: ContractRunner | null): SUSDaiStrategy;
+export interface IStrategy extends BaseContract {
+  connect(runner?: ContractRunner | null): IStrategy;
   waitForDeployment(): Promise<this>;
 
-  interface: SUSDaiStrategyInterface;
+  interface: IStrategyInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -346,8 +223,6 @@ export interface SUSDaiStrategy extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  acceptOwnership: TypedContractMethod<[], [void], "nonpayable">;
-
   baseAsset: TypedContractMethod<[], [string], "view">;
 
   deposit: TypedContractMethod<[amount: BigNumberish], [bigint], "nonpayable">;
@@ -362,23 +237,9 @@ export interface SUSDaiStrategy extends BaseContract {
 
   getCooldownHandlers: TypedContractMethod<[], [string[]], "view">;
 
-  i_baseAsset: TypedContractMethod<[], [string], "view">;
-
-  i_primeCDO: TypedContractMethod<[], [string], "view">;
-
-  i_sUSDai: TypedContractMethod<[], [string], "view">;
-
   isActive: TypedContractMethod<[], [boolean], "view">;
 
   name: TypedContractMethod<[], [string], "view">;
-
-  owner: TypedContractMethod<[], [string], "view">;
-
-  pause: TypedContractMethod<[], [void], "nonpayable">;
-
-  paused: TypedContractMethod<[], [boolean], "view">;
-
-  pendingOwner: TypedContractMethod<[], [string], "view">;
 
   predictWithdrawType: TypedContractMethod<
     [outputToken: AddressLike],
@@ -386,19 +247,9 @@ export interface SUSDaiStrategy extends BaseContract {
     "view"
   >;
 
-  renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
-
   supportedTokens: TypedContractMethod<[], [string[]], "view">;
 
   totalAssets: TypedContractMethod<[], [bigint], "view">;
-
-  transferOwnership: TypedContractMethod<
-    [newOwner: AddressLike],
-    [void],
-    "nonpayable"
-  >;
-
-  unpause: TypedContractMethod<[], [void], "nonpayable">;
 
   withdraw: TypedContractMethod<
     [amount: BigNumberish, outputToken: AddressLike, beneficiary: AddressLike],
@@ -410,9 +261,6 @@ export interface SUSDaiStrategy extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
-  getFunction(
-    nameOrSignature: "acceptOwnership"
-  ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "baseAsset"
   ): TypedContractMethod<[], [string], "view">;
@@ -433,50 +281,20 @@ export interface SUSDaiStrategy extends BaseContract {
     nameOrSignature: "getCooldownHandlers"
   ): TypedContractMethod<[], [string[]], "view">;
   getFunction(
-    nameOrSignature: "i_baseAsset"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "i_primeCDO"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "i_sUSDai"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
     nameOrSignature: "isActive"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
     nameOrSignature: "name"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "owner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "pause"
-  ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "paused"
-  ): TypedContractMethod<[], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "pendingOwner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
     nameOrSignature: "predictWithdrawType"
   ): TypedContractMethod<[outputToken: AddressLike], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "renounceOwnership"
-  ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "supportedTokens"
   ): TypedContractMethod<[], [string[]], "view">;
   getFunction(
     nameOrSignature: "totalAssets"
   ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "transferOwnership"
-  ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "unpause"
-  ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "withdraw"
   ): TypedContractMethod<
@@ -498,34 +316,6 @@ export interface SUSDaiStrategy extends BaseContract {
     EmergencyWithdrawnEvent.InputTuple,
     EmergencyWithdrawnEvent.OutputTuple,
     EmergencyWithdrawnEvent.OutputObject
-  >;
-  getEvent(
-    key: "OwnershipTransferStarted"
-  ): TypedContractEvent<
-    OwnershipTransferStartedEvent.InputTuple,
-    OwnershipTransferStartedEvent.OutputTuple,
-    OwnershipTransferStartedEvent.OutputObject
-  >;
-  getEvent(
-    key: "OwnershipTransferred"
-  ): TypedContractEvent<
-    OwnershipTransferredEvent.InputTuple,
-    OwnershipTransferredEvent.OutputTuple,
-    OwnershipTransferredEvent.OutputObject
-  >;
-  getEvent(
-    key: "Paused"
-  ): TypedContractEvent<
-    PausedEvent.InputTuple,
-    PausedEvent.OutputTuple,
-    PausedEvent.OutputObject
-  >;
-  getEvent(
-    key: "Unpaused"
-  ): TypedContractEvent<
-    UnpausedEvent.InputTuple,
-    UnpausedEvent.OutputTuple,
-    UnpausedEvent.OutputObject
   >;
   getEvent(
     key: "Withdrawn"
@@ -556,50 +346,6 @@ export interface SUSDaiStrategy extends BaseContract {
       EmergencyWithdrawnEvent.InputTuple,
       EmergencyWithdrawnEvent.OutputTuple,
       EmergencyWithdrawnEvent.OutputObject
-    >;
-
-    "OwnershipTransferStarted(address,address)": TypedContractEvent<
-      OwnershipTransferStartedEvent.InputTuple,
-      OwnershipTransferStartedEvent.OutputTuple,
-      OwnershipTransferStartedEvent.OutputObject
-    >;
-    OwnershipTransferStarted: TypedContractEvent<
-      OwnershipTransferStartedEvent.InputTuple,
-      OwnershipTransferStartedEvent.OutputTuple,
-      OwnershipTransferStartedEvent.OutputObject
-    >;
-
-    "OwnershipTransferred(address,address)": TypedContractEvent<
-      OwnershipTransferredEvent.InputTuple,
-      OwnershipTransferredEvent.OutputTuple,
-      OwnershipTransferredEvent.OutputObject
-    >;
-    OwnershipTransferred: TypedContractEvent<
-      OwnershipTransferredEvent.InputTuple,
-      OwnershipTransferredEvent.OutputTuple,
-      OwnershipTransferredEvent.OutputObject
-    >;
-
-    "Paused(address)": TypedContractEvent<
-      PausedEvent.InputTuple,
-      PausedEvent.OutputTuple,
-      PausedEvent.OutputObject
-    >;
-    Paused: TypedContractEvent<
-      PausedEvent.InputTuple,
-      PausedEvent.OutputTuple,
-      PausedEvent.OutputObject
-    >;
-
-    "Unpaused(address)": TypedContractEvent<
-      UnpausedEvent.InputTuple,
-      UnpausedEvent.OutputTuple,
-      UnpausedEvent.OutputObject
-    >;
-    Unpaused: TypedContractEvent<
-      UnpausedEvent.InputTuple,
-      UnpausedEvent.OutputTuple,
-      UnpausedEvent.OutputObject
     >;
 
     "Withdrawn(address,uint256,uint256)": TypedContractEvent<

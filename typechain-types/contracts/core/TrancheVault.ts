@@ -31,6 +31,8 @@ export type CDOWithdrawResultStruct = {
   unlockTime: BigNumberish;
   feeAmount: BigNumberish;
   appliedCooldownType: BigNumberish;
+  wethAmount: BigNumberish;
+  wethCooldownId: BigNumberish;
 };
 
 export type CDOWithdrawResultStructOutput = [
@@ -40,7 +42,9 @@ export type CDOWithdrawResultStructOutput = [
   cooldownHandler: string,
   unlockTime: bigint,
   feeAmount: bigint,
-  appliedCooldownType: bigint
+  appliedCooldownType: bigint,
+  wethAmount: bigint,
+  wethCooldownId: bigint
 ] & {
   isInstant: boolean;
   amountOut: bigint;
@@ -49,6 +53,8 @@ export type CDOWithdrawResultStructOutput = [
   unlockTime: bigint;
   feeAmount: bigint;
   appliedCooldownType: bigint;
+  wethAmount: bigint;
+  wethCooldownId: bigint;
 };
 
 export interface TrancheVaultInterface extends Interface {
@@ -58,6 +64,7 @@ export interface TrancheVaultInterface extends Interface {
       | "approve"
       | "asset"
       | "balanceOf"
+      | "burnSharesFrom"
       | "claimSharesWithdraw"
       | "claimWithdraw"
       | "convertToAssets"
@@ -112,8 +119,12 @@ export interface TrancheVaultInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "burnSharesFrom",
+    values: [AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "claimSharesWithdraw",
-    values: [BigNumberish, AddressLike]
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "claimWithdraw",
@@ -185,7 +196,7 @@ export interface TrancheVaultInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "requestWithdraw",
-    values: [BigNumberish, AddressLike, AddressLike]
+    values: [BigNumberish, AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "symbol", values?: undefined): string;
   encodeFunctionData(
@@ -213,6 +224,10 @@ export interface TrancheVaultInterface extends Interface {
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "asset", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "burnSharesFrom",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "claimSharesWithdraw",
     data: BytesLike
@@ -492,8 +507,14 @@ export interface TrancheVault extends BaseContract {
 
   balanceOf: TypedContractMethod<[account: AddressLike], [bigint], "view">;
 
+  burnSharesFrom: TypedContractMethod<
+    [account: AddressLike, shares: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   claimSharesWithdraw: TypedContractMethod<
-    [cooldownId: BigNumberish, outputToken: AddressLike],
+    [cooldownId: BigNumberish],
     [bigint],
     "nonpayable"
   >;
@@ -571,7 +592,7 @@ export interface TrancheVault extends BaseContract {
   >;
 
   requestWithdraw: TypedContractMethod<
-    [shares: BigNumberish, outputToken: AddressLike, receiver: AddressLike],
+    [shares: BigNumberish, receiver: AddressLike],
     [CDOWithdrawResultStructOutput],
     "nonpayable"
   >;
@@ -625,12 +646,15 @@ export interface TrancheVault extends BaseContract {
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[account: AddressLike], [bigint], "view">;
   getFunction(
-    nameOrSignature: "claimSharesWithdraw"
+    nameOrSignature: "burnSharesFrom"
   ): TypedContractMethod<
-    [cooldownId: BigNumberish, outputToken: AddressLike],
-    [bigint],
+    [account: AddressLike, shares: BigNumberish],
+    [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "claimSharesWithdraw"
+  ): TypedContractMethod<[cooldownId: BigNumberish], [bigint], "nonpayable">;
   getFunction(
     nameOrSignature: "claimWithdraw"
   ): TypedContractMethod<
@@ -714,7 +738,7 @@ export interface TrancheVault extends BaseContract {
   getFunction(
     nameOrSignature: "requestWithdraw"
   ): TypedContractMethod<
-    [shares: BigNumberish, outputToken: AddressLike, receiver: AddressLike],
+    [shares: BigNumberish, receiver: AddressLike],
     [CDOWithdrawResultStructOutput],
     "nonpayable"
   >;

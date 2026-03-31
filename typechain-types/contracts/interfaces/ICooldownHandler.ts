@@ -48,40 +48,21 @@ export type CooldownRequestStructOutput = [
   status: bigint;
 };
 
-export interface ERC20CooldownInterface extends Interface {
+export interface ICooldownHandlerInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "acceptOwnership"
       | "claim"
       | "getPendingRequests"
       | "getRequest"
       | "isClaimable"
-      | "owner"
-      | "pendingOwner"
-      | "renounceOwnership"
       | "request"
-      | "s_authorized"
-      | "s_cooldownDuration"
-      | "s_nextRequestId"
-      | "s_requests"
-      | "setAuthorized"
-      | "setCooldownDuration"
       | "timeRemaining"
-      | "transferOwnership"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic:
-      | "CooldownClaimed"
-      | "CooldownRequested"
-      | "OwnershipTransferStarted"
-      | "OwnershipTransferred"
+    nameOrSignatureOrTopic: "CooldownClaimed" | "CooldownRequested"
   ): EventFragment;
 
-  encodeFunctionData(
-    functionFragment: "acceptOwnership",
-    values?: undefined
-  ): string;
   encodeFunctionData(functionFragment: "claim", values: [BigNumberish]): string;
   encodeFunctionData(
     functionFragment: "getPendingRequests",
@@ -95,56 +76,15 @@ export interface ERC20CooldownInterface extends Interface {
     functionFragment: "isClaimable",
     values: [BigNumberish]
   ): string;
-  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "pendingOwner",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "renounceOwnership",
-    values?: undefined
-  ): string;
   encodeFunctionData(
     functionFragment: "request",
     values: [AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "s_authorized",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "s_cooldownDuration",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "s_nextRequestId",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "s_requests",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setAuthorized",
-    values: [AddressLike, boolean]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setCooldownDuration",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
     functionFragment: "timeRemaining",
     values: [BigNumberish]
   ): string;
-  encodeFunctionData(
-    functionFragment: "transferOwnership",
-    values: [AddressLike]
-  ): string;
 
-  decodeFunctionResult(
-    functionFragment: "acceptOwnership",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getPendingRequests",
@@ -155,43 +95,9 @@ export interface ERC20CooldownInterface extends Interface {
     functionFragment: "isClaimable",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "pendingOwner",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "renounceOwnership",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "request", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "s_authorized",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "s_cooldownDuration",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "s_nextRequestId",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "s_requests", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "setAuthorized",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "setCooldownDuration",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "timeRemaining",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "transferOwnership",
     data: BytesLike
   ): Result;
 }
@@ -249,37 +155,11 @@ export namespace CooldownRequestedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace OwnershipTransferStartedEvent {
-  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
-  export type OutputTuple = [previousOwner: string, newOwner: string];
-  export interface OutputObject {
-    previousOwner: string;
-    newOwner: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace OwnershipTransferredEvent {
-  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
-  export type OutputTuple = [previousOwner: string, newOwner: string];
-  export interface OutputObject {
-    previousOwner: string;
-    newOwner: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export interface ERC20Cooldown extends BaseContract {
-  connect(runner?: ContractRunner | null): ERC20Cooldown;
+export interface ICooldownHandler extends BaseContract {
+  connect(runner?: ContractRunner | null): ICooldownHandler;
   waitForDeployment(): Promise<this>;
 
-  interface: ERC20CooldownInterface;
+  interface: ICooldownHandlerInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -318,8 +198,6 @@ export interface ERC20Cooldown extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  acceptOwnership: TypedContractMethod<[], [void], "nonpayable">;
-
   claim: TypedContractMethod<[requestId: BigNumberish], [bigint], "nonpayable">;
 
   getPendingRequests: TypedContractMethod<
@@ -340,48 +218,9 @@ export interface ERC20Cooldown extends BaseContract {
     "view"
   >;
 
-  owner: TypedContractMethod<[], [string], "view">;
-
-  pendingOwner: TypedContractMethod<[], [string], "view">;
-
-  renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
-
   request: TypedContractMethod<
     [beneficiary: AddressLike, token: AddressLike, amount: BigNumberish],
     [bigint],
-    "nonpayable"
-  >;
-
-  s_authorized: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
-
-  s_cooldownDuration: TypedContractMethod<[], [bigint], "view">;
-
-  s_nextRequestId: TypedContractMethod<[], [bigint], "view">;
-
-  s_requests: TypedContractMethod<
-    [arg0: BigNumberish],
-    [
-      [string, string, bigint, bigint, bigint, bigint] & {
-        beneficiary: string;
-        token: string;
-        amount: bigint;
-        requestTime: bigint;
-        unlockTime: bigint;
-        status: bigint;
-      }
-    ],
-    "view"
-  >;
-
-  setAuthorized: TypedContractMethod<
-    [addr: AddressLike, authorized: boolean],
-    [void],
-    "nonpayable"
-  >;
-
-  setCooldownDuration: TypedContractMethod<
-    [duration_: BigNumberish],
-    [void],
     "nonpayable"
   >;
 
@@ -391,19 +230,10 @@ export interface ERC20Cooldown extends BaseContract {
     "view"
   >;
 
-  transferOwnership: TypedContractMethod<
-    [newOwner: AddressLike],
-    [void],
-    "nonpayable"
-  >;
-
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
-  getFunction(
-    nameOrSignature: "acceptOwnership"
-  ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "claim"
   ): TypedContractMethod<[requestId: BigNumberish], [bigint], "nonpayable">;
@@ -421,15 +251,6 @@ export interface ERC20Cooldown extends BaseContract {
     nameOrSignature: "isClaimable"
   ): TypedContractMethod<[requestId: BigNumberish], [boolean], "view">;
   getFunction(
-    nameOrSignature: "owner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "pendingOwner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "renounceOwnership"
-  ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "request"
   ): TypedContractMethod<
     [beneficiary: AddressLike, token: AddressLike, amount: BigNumberish],
@@ -437,46 +258,8 @@ export interface ERC20Cooldown extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "s_authorized"
-  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "s_cooldownDuration"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_nextRequestId"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "s_requests"
-  ): TypedContractMethod<
-    [arg0: BigNumberish],
-    [
-      [string, string, bigint, bigint, bigint, bigint] & {
-        beneficiary: string;
-        token: string;
-        amount: bigint;
-        requestTime: bigint;
-        unlockTime: bigint;
-        status: bigint;
-      }
-    ],
-    "view"
-  >;
-  getFunction(
-    nameOrSignature: "setAuthorized"
-  ): TypedContractMethod<
-    [addr: AddressLike, authorized: boolean],
-    [void],
-    "nonpayable"
-  >;
-  getFunction(
-    nameOrSignature: "setCooldownDuration"
-  ): TypedContractMethod<[duration_: BigNumberish], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "timeRemaining"
   ): TypedContractMethod<[requestId: BigNumberish], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "transferOwnership"
-  ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
 
   getEvent(
     key: "CooldownClaimed"
@@ -491,20 +274,6 @@ export interface ERC20Cooldown extends BaseContract {
     CooldownRequestedEvent.InputTuple,
     CooldownRequestedEvent.OutputTuple,
     CooldownRequestedEvent.OutputObject
-  >;
-  getEvent(
-    key: "OwnershipTransferStarted"
-  ): TypedContractEvent<
-    OwnershipTransferStartedEvent.InputTuple,
-    OwnershipTransferStartedEvent.OutputTuple,
-    OwnershipTransferStartedEvent.OutputObject
-  >;
-  getEvent(
-    key: "OwnershipTransferred"
-  ): TypedContractEvent<
-    OwnershipTransferredEvent.InputTuple,
-    OwnershipTransferredEvent.OutputTuple,
-    OwnershipTransferredEvent.OutputObject
   >;
 
   filters: {
@@ -528,28 +297,6 @@ export interface ERC20Cooldown extends BaseContract {
       CooldownRequestedEvent.InputTuple,
       CooldownRequestedEvent.OutputTuple,
       CooldownRequestedEvent.OutputObject
-    >;
-
-    "OwnershipTransferStarted(address,address)": TypedContractEvent<
-      OwnershipTransferStartedEvent.InputTuple,
-      OwnershipTransferStartedEvent.OutputTuple,
-      OwnershipTransferStartedEvent.OutputObject
-    >;
-    OwnershipTransferStarted: TypedContractEvent<
-      OwnershipTransferStartedEvent.InputTuple,
-      OwnershipTransferStartedEvent.OutputTuple,
-      OwnershipTransferStartedEvent.OutputObject
-    >;
-
-    "OwnershipTransferred(address,address)": TypedContractEvent<
-      OwnershipTransferredEvent.InputTuple,
-      OwnershipTransferredEvent.OutputTuple,
-      OwnershipTransferredEvent.OutputObject
-    >;
-    OwnershipTransferred: TypedContractEvent<
-      OwnershipTransferredEvent.InputTuple,
-      OwnershipTransferredEvent.OutputTuple,
-      OwnershipTransferredEvent.OutputObject
     >;
   };
 }

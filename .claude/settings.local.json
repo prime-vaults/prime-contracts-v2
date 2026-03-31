@@ -19,7 +19,14 @@
       "Bash(npx tsup:*)",
       "Bash(npx vitest:*)",
       "Bash(npx tsx:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(cast sig-event:*)",
+      "Bash(cast 4byte 0x2c5211c6)",
+      "WebFetch(domain:api.arbiscan.io)",
+      "WebFetch(domain:arbiscan.io)",
+      "Bash(cast sig:*)",
+      "Bash(cast storage:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

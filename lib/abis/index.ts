@@ -124,7 +124,6 @@ export const PRIME_LENS_ABI = [
           { name: "token", type: "address" },
           { name: "amount", type: "uint256" },
           { name: "unlockTime", type: "uint256" },
-          { name: "expiryTime", type: "uint256" },
           { name: "status", type: "uint8" },
           { name: "isClaimable", type: "bool" },
           { name: "timeRemaining", type: "uint256" },
@@ -148,7 +147,6 @@ export const PRIME_LENS_ABI = [
           { name: "token", type: "address" },
           { name: "amount", type: "uint256" },
           { name: "unlockTime", type: "uint256" },
-          { name: "expiryTime", type: "uint256" },
           { name: "status", type: "uint8" },
           { name: "isClaimable", type: "bool" },
           { name: "timeRemaining", type: "uint256" },
@@ -239,7 +237,6 @@ export const TRANCHE_VAULT_ABI = [
   {
     inputs: [
       { name: "shares", type: "uint256" },
-      { name: "outputToken", type: "address" },
       { name: "receiver", type: "address" },
     ],
     name: "requestWithdraw",
@@ -253,6 +250,8 @@ export const TRANCHE_VAULT_ABI = [
           { name: "unlockTime", type: "uint256" },
           { name: "feeAmount", type: "uint256" },
           { name: "appliedCooldownType", type: "uint8" },
+          { name: "wethAmount", type: "uint256" },
+          { name: "wethCooldownId", type: "uint256" },
         ],
         name: "result",
         type: "tuple",
@@ -260,6 +259,33 @@ export const TRANCHE_VAULT_ABI = [
     ],
     stateMutability: "nonpayable",
     type: "function",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "owner", type: "address" },
+      { indexed: true, name: "receiver", type: "address" },
+      { indexed: false, name: "shares", type: "uint256" },
+      { indexed: false, name: "baseAmount", type: "uint256" },
+      {
+        indexed: false,
+        name: "result",
+        type: "tuple",
+        components: [
+          { name: "isInstant", type: "bool" },
+          { name: "amountOut", type: "uint256" },
+          { name: "cooldownId", type: "uint256" },
+          { name: "cooldownHandler", type: "address" },
+          { name: "unlockTime", type: "uint256" },
+          { name: "feeAmount", type: "uint256" },
+          { name: "appliedCooldownType", type: "uint8" },
+          { name: "wethAmount", type: "uint256" },
+          { name: "wethCooldownId", type: "uint256" },
+        ],
+      },
+    ],
+    name: "WithdrawRequested",
+    type: "event",
   },
   {
     inputs: [
@@ -274,7 +300,6 @@ export const TRANCHE_VAULT_ABI = [
   {
     inputs: [
       { name: "cooldownId", type: "uint256" },
-      { name: "outputToken", type: "address" },
     ],
     name: "claimSharesWithdraw",
     outputs: [{ name: "amountOut", type: "uint256" }],

@@ -10,7 +10,6 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {WithdrawResult, WithdrawType} from "../../interfaces/IStrategy.sol";
-import {ICooldownHandler, CooldownRequest} from "../../interfaces/ICooldownHandler.sol";
 import {BaseStrategy} from "../BaseStrategy.sol";
 
 /**
@@ -50,9 +49,8 @@ interface IStakedUSDai {
  * @notice Strategy adapter for USD.AI sUSDai vault on Arbitrum.
  * @dev Deposit: USDai → sUSDai.deposit() (synchronous, ERC-4626).
  *      Deposit sUSDai directly: just holds it (already yield-bearing).
- *      Withdraw sUSDai: instant transfer (WithdrawType.INSTANT).
- *      Withdraw USDai: sUSDai.requestRedeem() → FIFO queue (WithdrawType.UNSTAKE).
- *        unlockTime read from sUSDai.redemption(id).redemptionTimestamp (exact, not estimate).
+ *      Withdraw: always instant sUSDai transfer. Users convert sUSDai → USD.AI
+ *      via the sUSDai ERC-7540 FIFO queue directly.
  *      sUSDai: 0x0B2b2B2076d95dda7817e785989fE353fe955ef9 (Arbitrum)
  *      USDai:  0x0A1a1A107E45b7Ced86833863f482BC5f4ed82EF (Arbitrum)
  */
@@ -64,17 +62,14 @@ contract SUSDaiStrategy is BaseStrategy {
     // ═══════════════════════════════════════════════════════════════════
 
     IStakedUSDai public immutable i_sUSDai;
-    address public immutable i_unstakeCooldown;
 
     // ═══════════════════════════════════════════════════════════════════
     //  CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════
 
-    constructor(address primeCDO_, address usdai_, address sUSDai_, address unstakeCooldown_, address owner_) BaseStrategy(primeCDO_, usdai_, owner_) {
+    constructor(address primeCDO_, address usdai_, address sUSDai_, address owner_) BaseStrategy(primeCDO_, usdai_, owner_) {
         i_sUSDai = IStakedUSDai(sUSDai_);
-        i_unstakeCooldown = unstakeCooldown_;
         IERC20(usdai_).approve(sUSDai_, type(uint256).max);
-        IStakedUSDai(sUSDai_).approve(unstakeCooldown_, type(uint256).max);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -96,11 +91,10 @@ contract SUSDaiStrategy is BaseStrategy {
 
     /**
      * @notice Predict withdrawal type for a given output token.
-     * @dev sUSDai → INSTANT (direct transfer). USDai → UNSTAKE (ERC-7540 async).
+     * @dev Only sUSDai is supported — always INSTANT (direct transfer).
      */
     function predictWithdrawType(address outputToken) external view override returns (WithdrawType) {
         if (outputToken == address(i_sUSDai)) return WithdrawType.INSTANT;
-        if (outputToken == i_baseAsset) return WithdrawType.UNSTAKE;
         revert PrimeVaults__UnsupportedToken(outputToken);
     }
 
@@ -135,36 +129,17 @@ contract SUSDaiStrategy is BaseStrategy {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @dev Withdraw logic:
-     *      sUSDai output → instant transfer.
-     *      USDai output → sUSDai.requestRedeem() → read exact redemptionTimestamp from contract.
+     * @dev Withdraw logic: always instant sUSDai transfer.
+     *      Only sUSDai output is supported — users convert sUSDai → USD.AI
+     *      via the sUSDai ERC-7540 FIFO queue directly.
      */
     function _withdraw(uint256 amount, address outputToken, address beneficiary) internal override returns (WithdrawResult memory result) {
-        if (outputToken == address(i_sUSDai)) {
-            // Instant: transfer sUSDai directly
-            uint256 shares = i_sUSDai.convertToShares(amount);
-            i_sUSDai.transfer(beneficiary, shares);
-            result = WithdrawResult({wType: WithdrawType.INSTANT, amountOut: shares, cooldownId: 0, cooldownHandler: address(0), unlockTime: 0});
-            emit Withdrawn(outputToken, amount, shares);
-        } else if (outputToken == i_baseAsset) {
-            // Unstake: delegate to UnstakeCooldown → SUSDaiCooldownRequestImpl → sUSDai FIFO queue
-            uint256 shares = i_sUSDai.convertToShares(amount);
-            uint256 requestId = ICooldownHandler(i_unstakeCooldown).request(beneficiary, address(i_sUSDai), shares);
+        if (outputToken != address(i_sUSDai)) revert PrimeVaults__UnsupportedToken(outputToken);
 
-            // Read unlockTime from the cooldown request (set from sUSDai.redemptionTimestamp)
-            CooldownRequest memory req = ICooldownHandler(i_unstakeCooldown).getRequest(requestId);
-
-            result = WithdrawResult({
-                wType: WithdrawType.UNSTAKE,
-                amountOut: 0,
-                cooldownId: requestId,
-                cooldownHandler: i_unstakeCooldown,
-                unlockTime: req.unlockTime
-            });
-            emit Withdrawn(outputToken, amount, shares);
-        } else {
-            revert PrimeVaults__UnsupportedToken(outputToken);
-        }
+        uint256 shares = i_sUSDai.convertToShares(amount);
+        i_sUSDai.transfer(beneficiary, shares);
+        result = WithdrawResult({wType: WithdrawType.INSTANT, amountOut: shares, cooldownId: 0, cooldownHandler: address(0), unlockTime: 0});
+        emit Withdrawn(outputToken, amount, shares);
     }
 
     // ═══════════════════════════════════════════════════════════════════

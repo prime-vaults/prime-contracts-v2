@@ -10,8 +10,7 @@ pragma solidity ^0.8.24;
 /** @notice Type of withdrawal mechanism returned by a strategy */
 enum WithdrawType {
     INSTANT,
-    ASSETS_LOCK,
-    UNSTAKE
+    ASSETS_LOCK
 }
 
 /** @notice Result returned by strategy withdraw operations */

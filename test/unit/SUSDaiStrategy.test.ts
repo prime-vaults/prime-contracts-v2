@@ -1,17 +1,13 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 const INSTANT = 0;
-const UNSTAKE = 2;
 
 describe("SUSDaiStrategy", () => {
   let strategy: any;
   let mockSUSDai: any;
   let mockUSDai: any;
-  let unstakeCooldown: any;
-  let cooldownImpl: any;
   let cdo: SignerWithAddress;
   let owner: SignerWithAddress;
   let beneficiary: SignerWithAddress;
@@ -31,30 +27,12 @@ describe("SUSDaiStrategy", () => {
     mockSUSDai = await SUSDaiFactory.deploy(await mockUSDai.getAddress(), E18);
     await mockUSDai.mint(await mockSUSDai.getAddress(), 1_000_000n * E18);
 
-    // Deploy UnstakeCooldown
-    const UCFactory = await ethers.getContractFactory("UnstakeCooldown");
-    unstakeCooldown = await UCFactory.deploy(owner.address);
-
-    // Deploy SUSDaiCooldownRequestImpl
-    const ImplFactory = await ethers.getContractFactory("SUSDaiCooldownRequestImpl");
-    cooldownImpl = await ImplFactory.deploy(
-      await mockSUSDai.getAddress(),
-      await mockUSDai.getAddress(),
-      await unstakeCooldown.getAddress(),
-    );
-
-    // Register impl in UnstakeCooldown
-    await unstakeCooldown.connect(owner).setImplementation(await mockSUSDai.getAddress(), await cooldownImpl.getAddress());
-
-    // Deploy strategy (with unstakeCooldown in constructor)
+    // Deploy strategy
     const StratFactory = await ethers.getContractFactory("SUSDaiStrategy");
     strategy = await StratFactory.deploy(
       cdo.address, await mockUSDai.getAddress(), await mockSUSDai.getAddress(),
-      await unstakeCooldown.getAddress(), owner.address,
+      owner.address,
     );
-
-    // Authorize strategy in UnstakeCooldown
-    await unstakeCooldown.connect(owner).setAuthorized(await strategy.getAddress(), true);
 
     // Mint USDai to CDO and approve strategy
     await mockUSDai.mint(cdo.address, 100_000n * E18);
@@ -134,63 +112,17 @@ describe("SUSDaiStrategy", () => {
     });
   });
 
-  // ═══════════════════════════════════════════════════════════════════
-  //  withdraw USDai → UNSTAKE via UnstakeCooldown
-  // ═══════════════════════════════════════════════════════════════════
-
-  describe("withdraw USDai (unstake via UnstakeCooldown)", () => {
+  describe("withdraw unsupported token", () => {
     beforeEach(async () => {
       await strategy.connect(cdo).deposit(5000n * E18);
     });
 
-    it("should return UNSTAKE type with cooldownHandler = UnstakeCooldown", async () => {
-      const result = await strategy.connect(cdo).withdraw.staticCall(
-        1000n * E18, await mockUSDai.getAddress(), beneficiary.address,
-      );
-      expect(result.wType).to.equal(UNSTAKE);
-      expect(result.amountOut).to.equal(0);
-      expect(result.cooldownHandler).to.equal(await unstakeCooldown.getAddress());
+    it("should revert for USDai as output token (only sUSDai supported)", async () => {
+      await expect(strategy.connect(cdo).withdraw(1000n * E18, await mockUSDai.getAddress(), beneficiary.address))
+        .to.be.revertedWithCustomError(strategy, "PrimeVaults__UnsupportedToken");
     });
 
-    it("should have requestId from UnstakeCooldown (not sUSDai redemptionId)", async () => {
-      const result = await strategy.connect(cdo).withdraw.staticCall(
-        1000n * E18, await mockUSDai.getAddress(), beneficiary.address,
-      );
-      expect(result.cooldownId).to.equal(1); // UnstakeCooldown requestId
-    });
-
-    it("should set unlockTime from sUSDai.redemptionTimestamp", async () => {
-      const result = await strategy.connect(cdo).withdraw.staticCall(
-        1000n * E18, await mockUSDai.getAddress(), beneficiary.address,
-      );
-      const now = BigInt(await time.latest());
-      expect(result.unlockTime).to.be.gte(now + 7n * 86400n - 2n);
-      expect(result.unlockTime).to.be.lte(now + 7n * 86400n + 2n);
-    });
-
-    it("should be claimable via UnstakeCooldown after serviceRedemptions", async () => {
-      await strategy.connect(cdo).withdraw(1000n * E18, await mockUSDai.getAddress(), beneficiary.address);
-
-      // Not claimable before service
-      expect(await unstakeCooldown.isClaimable(1)).to.be.false;
-
-      // USD.AI admin services the redemption
-      await mockSUSDai.serviceRedemptions(1);
-
-      // Now claimable
-      expect(await unstakeCooldown.isClaimable(1)).to.be.true;
-
-      // Claim → USDai to beneficiary
-      await unstakeCooldown.claim(1);
-      expect(await mockUSDai.balanceOf(beneficiary.address)).to.equal(1000n * E18);
-    });
-
-    it("should burn sUSDai shares from strategy", async () => {
-      await strategy.connect(cdo).withdraw(1000n * E18, await mockUSDai.getAddress(), beneficiary.address);
-      expect(await mockSUSDai.balanceOf(await strategy.getAddress())).to.equal(4000n * E18);
-    });
-
-    it("should revert for unsupported output token", async () => {
+    it("should revert for arbitrary address as output token", async () => {
       await expect(strategy.connect(cdo).withdraw(1000n * E18, other.address, beneficiary.address))
         .to.be.revertedWithCustomError(strategy, "PrimeVaults__UnsupportedToken");
     });
@@ -216,9 +148,9 @@ describe("SUSDaiStrategy", () => {
       expect(await strategy.totalAssets()).to.equal(5500n * E18);
     });
 
-    it("should exclude shares sent to unstake cooldown", async () => {
+    it("should decrease after sUSDai withdraw", async () => {
       await strategy.connect(cdo).deposit(5000n * E18);
-      await strategy.connect(cdo).withdraw(1000n * E18, await mockUSDai.getAddress(), beneficiary.address);
+      await strategy.connect(cdo).withdraw(1000n * E18, await mockSUSDai.getAddress(), beneficiary.address);
       expect(await strategy.totalAssets()).to.equal(4000n * E18);
     });
   });
@@ -263,8 +195,9 @@ describe("SUSDaiStrategy", () => {
       expect(await strategy.predictWithdrawType(await mockSUSDai.getAddress())).to.equal(INSTANT);
     });
 
-    it("should predict UNSTAKE for USDai", async () => {
-      expect(await strategy.predictWithdrawType(await mockUSDai.getAddress())).to.equal(UNSTAKE);
+    it("should revert for USDai (unsupported output)", async () => {
+      await expect(strategy.predictWithdrawType(await mockUSDai.getAddress()))
+        .to.be.revertedWithCustomError(strategy, "PrimeVaults__UnsupportedToken");
     });
   });
 

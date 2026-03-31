@@ -29,7 +29,6 @@ export type CooldownRequestStruct = {
   amount: BigNumberish;
   requestTime: BigNumberish;
   unlockTime: BigNumberish;
-  expiryTime: BigNumberish;
   status: BigNumberish;
 };
 
@@ -39,7 +38,6 @@ export type CooldownRequestStructOutput = [
   amount: bigint,
   requestTime: bigint,
   unlockTime: bigint,
-  expiryTime: bigint,
   status: bigint
 ] & {
   beneficiary: string;
@@ -47,7 +45,6 @@ export type CooldownRequestStructOutput = [
   amount: bigint;
   requestTime: bigint;
   unlockTime: bigint;
-  expiryTime: bigint;
   status: bigint;
 };
 
@@ -77,7 +74,6 @@ export interface SharesCooldownInterface extends Interface {
   getEvent(
     nameOrSignatureOrTopic:
       | "CooldownClaimed"
-      | "CooldownExpired"
       | "CooldownRequested"
       | "OwnershipTransferStarted"
       | "OwnershipTransferred"
@@ -234,18 +230,6 @@ export namespace CooldownClaimedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace CooldownExpiredEvent {
-  export type InputTuple = [requestId: BigNumberish];
-  export type OutputTuple = [requestId: bigint];
-  export interface OutputObject {
-    requestId: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export namespace CooldownRequestedEvent {
   export type InputTuple = [
     requestId: BigNumberish,
@@ -388,13 +372,12 @@ export interface SharesCooldown extends BaseContract {
   s_requests: TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, string, bigint, bigint, bigint, bigint, bigint] & {
+      [string, string, bigint, bigint, bigint, bigint] & {
         beneficiary: string;
         token: string;
         amount: bigint;
         requestTime: bigint;
         unlockTime: bigint;
-        expiryTime: bigint;
         status: bigint;
       }
     ],
@@ -481,13 +464,12 @@ export interface SharesCooldown extends BaseContract {
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, string, bigint, bigint, bigint, bigint, bigint] & {
+      [string, string, bigint, bigint, bigint, bigint] & {
         beneficiary: string;
         token: string;
         amount: bigint;
         requestTime: bigint;
         unlockTime: bigint;
-        expiryTime: bigint;
         status: bigint;
       }
     ],
@@ -516,13 +498,6 @@ export interface SharesCooldown extends BaseContract {
     CooldownClaimedEvent.InputTuple,
     CooldownClaimedEvent.OutputTuple,
     CooldownClaimedEvent.OutputObject
-  >;
-  getEvent(
-    key: "CooldownExpired"
-  ): TypedContractEvent<
-    CooldownExpiredEvent.InputTuple,
-    CooldownExpiredEvent.OutputTuple,
-    CooldownExpiredEvent.OutputObject
   >;
   getEvent(
     key: "CooldownRequested"
@@ -556,17 +531,6 @@ export interface SharesCooldown extends BaseContract {
       CooldownClaimedEvent.InputTuple,
       CooldownClaimedEvent.OutputTuple,
       CooldownClaimedEvent.OutputObject
-    >;
-
-    "CooldownExpired(uint256)": TypedContractEvent<
-      CooldownExpiredEvent.InputTuple,
-      CooldownExpiredEvent.OutputTuple,
-      CooldownExpiredEvent.OutputObject
-    >;
-    CooldownExpired: TypedContractEvent<
-      CooldownExpiredEvent.InputTuple,
-      CooldownExpiredEvent.OutputTuple,
-      CooldownExpiredEvent.OutputObject
     >;
 
     "CooldownRequested(uint256,address,address,uint256,uint256)": TypedContractEvent<

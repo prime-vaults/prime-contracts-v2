@@ -18,7 +18,7 @@ import {ICooldownHandler, CooldownRequest, CooldownStatus} from "../interfaces/I
  * @dev Shared across all markets. Request IDs are globally unique.
  *      Flow: authorized caller (CDO/strategy) calls request() → tokens locked here →
  *      after unlockTime, anyone calls claim() → tokens sent to beneficiary.
- *      Requests expire after expiryTime (unlockTime + expiryWindow).
+ *      No expiry — tokens can be claimed at any time after unlock.
  */
 contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
     using SafeERC20 for IERC20;
@@ -29,7 +29,6 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
 
     uint256 public s_nextRequestId;
     uint256 public s_cooldownDuration;  // seconds until claimable
-    uint256 public s_expiryWindow;      // seconds after unlock until expired
 
     mapping(uint256 => CooldownRequest) public s_requests;
     mapping(address => uint256[]) private s_beneficiaryRequests;
@@ -42,7 +41,6 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
     error PrimeVaults__Unauthorized(address caller);
     error PrimeVaults__NotClaimable(uint256 requestId);
     error PrimeVaults__AlreadyClaimed(uint256 requestId);
-    error PrimeVaults__Expired(uint256 requestId);
     error PrimeVaults__CooldownNotReady(uint256 requestId, uint256 unlockTime);
 
     // ═══════════════════════════════════════════════════════════════════
@@ -58,9 +56,8 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
     //  CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════
 
-    constructor(address owner_, uint256 cooldownDuration_, uint256 expiryWindow_) Ownable(owner_) {
+    constructor(address owner_, uint256 cooldownDuration_) Ownable(owner_) {
         s_cooldownDuration = cooldownDuration_;
-        s_expiryWindow = expiryWindow_;
         s_nextRequestId = 1;
     }
 
@@ -77,7 +74,6 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
 
         requestId = s_nextRequestId++;
         uint256 unlockTime = block.timestamp + s_cooldownDuration;
-        uint256 expiryTime = unlockTime + s_expiryWindow;
 
         s_requests[requestId] = CooldownRequest({
             beneficiary: beneficiary,
@@ -85,7 +81,6 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
             amount: amount,
             requestTime: block.timestamp,
             unlockTime: unlockTime,
-            expiryTime: expiryTime,
             status: CooldownStatus.PENDING
         });
 
@@ -105,12 +100,6 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
         if (req.status != CooldownStatus.PENDING) revert PrimeVaults__NotClaimable(requestId);
         if (block.timestamp < req.unlockTime) revert PrimeVaults__CooldownNotReady(requestId, req.unlockTime);
 
-        if (block.timestamp > req.expiryTime) {
-            req.status = CooldownStatus.EXPIRED;
-            emit CooldownExpired(requestId);
-            revert PrimeVaults__Expired(requestId);
-        }
-
         req.status = CooldownStatus.CLAIMED;
         amountOut = req.amount;
 
@@ -126,7 +115,7 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
     /** @notice Check whether a request can be claimed now. */
     function isClaimable(uint256 requestId) external view override returns (bool) {
         CooldownRequest memory req = s_requests[requestId];
-        return req.status == CooldownStatus.PENDING && block.timestamp >= req.unlockTime && block.timestamp <= req.expiryTime;
+        return req.status == CooldownStatus.PENDING && block.timestamp >= req.unlockTime;
     }
 
     /** @notice Get full details of a request. */
@@ -171,7 +160,4 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
         s_cooldownDuration = duration_;
     }
 
-    function setExpiryWindow(uint256 window_) external onlyOwner {
-        s_expiryWindow = window_;
-    }
 }

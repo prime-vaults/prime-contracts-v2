@@ -87,17 +87,14 @@ describe("PrimeCDO — Withdrawals", () => {
     const RPFactory = await ethers.getContractFactory("RedemptionPolicy");
     redemptionPolicy = await RPFactory.deploy(owner.address, await accounting.getAddress());
 
-    // --- Predict CDO address: UC(+0), Strategy(+1), Adapter(+2), CDO(+3) ---
+    // --- Predict CDO address: Strategy(+0), Adapter(+1), CDO(+2) ---
     const nonceBefore = await ethers.provider.getTransactionCount(owner.address);
-    const predictedCDO = ethers.getCreateAddress({ from: owner.address, nonce: nonceBefore + 3 });
-
-    const UCFactory = await ethers.getContractFactory("UnstakeCooldown");
-    const unstakeCooldown = await UCFactory.deploy(owner.address);
+    const predictedCDO = ethers.getCreateAddress({ from: owner.address, nonce: nonceBefore + 2 });
 
     const StratFactory = await ethers.getContractFactory("SUSDaiStrategy");
     strategy = await StratFactory.deploy(
       predictedCDO, await mockUSDai.getAddress(), await mockSUSDai.getAddress(),
-      await unstakeCooldown.getAddress(), owner.address,
+      owner.address,
     );
 
     const AdapterFactory = await ethers.getContractFactory("AaveWETHAdapter");
@@ -112,7 +109,7 @@ describe("PrimeCDO — Withdrawals", () => {
       await adapter.getAddress(), await oracle.getAddress(), ethers.ZeroAddress,
       await mockWeth.getAddress(),
       await redemptionPolicy.getAddress(), await erc20Cooldown.getAddress(),
-      await sharesCooldown.getAddress(), owner.address,
+      await sharesCooldown.getAddress(), await mockSUSDai.getAddress(), owner.address,
     );
 
     // --- Wire up ---
@@ -147,7 +144,7 @@ describe("PrimeCDO — Withdrawals", () => {
     it("should return instant result with 0 fee at high coverage", async () => {
       // cs ≈ 2.43x — healthy
       const result = await cdo.connect(seniorVault).requestWithdraw.staticCall(
-        SENIOR, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        SENIOR, 1_000n * E18, beneficiary.address, 0,
       );
       expect(result.isInstant).to.be.true;
       expect(result.feeAmount).to.equal(0);
@@ -156,7 +153,7 @@ describe("PrimeCDO — Withdrawals", () => {
     it("should return instant even at low coverage (cs ≈ 1.18x)", async () => {
       await seedTVL(SENIOR, 50_000n * E18); // Sr=57K, Jr=10K → cs ≈ 1.18x
       const result = await cdo.connect(seniorVault).requestWithdraw.staticCall(
-        SENIOR, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        SENIOR, 1_000n * E18, beneficiary.address, 0,
       );
       expect(result.isInstant).to.be.true;
       expect(result.feeAmount).to.equal(0);
@@ -165,7 +162,7 @@ describe("PrimeCDO — Withdrawals", () => {
     it("should return instant at extreme low coverage (cs ≈ 1.01x)", async () => {
       await seedTVL(SENIOR, 990_000n * E18); // cs ≈ 1.01x
       const result = await cdo.connect(seniorVault).requestWithdraw.staticCall(
-        SENIOR, 500n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        SENIOR, 500n * E18, beneficiary.address, 0,
       );
       expect(result.isInstant).to.be.true;
       expect(result.feeAmount).to.equal(0);
@@ -185,7 +182,7 @@ describe("PrimeCDO — Withdrawals", () => {
 
     it("should return instant result with 0 fee", async () => {
       const result = await cdo.connect(mezzVault).requestWithdraw.staticCall(
-        MEZZ, 500n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        MEZZ, 500n * E18, beneficiary.address, 0,
       );
       expect(result.isInstant).to.be.true;
       expect(result.feeAmount).to.equal(0);
@@ -206,7 +203,7 @@ describe("PrimeCDO — Withdrawals", () => {
 
     it("should return ASSETS_LOCK with fee and cooldown handler", async () => {
       const result = await cdo.connect(mezzVault).requestWithdraw.staticCall(
-        MEZZ, 500n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        MEZZ, 500n * E18, beneficiary.address, 0,
       );
       expect(result.isInstant).to.be.false;
       expect(result.appliedCooldownType).to.equal(1); // ASSETS_LOCK
@@ -218,7 +215,7 @@ describe("PrimeCDO — Withdrawals", () => {
     it("should deduct fee and add to reserve", async () => {
       const reserveBefore = await accounting.s_reserveTVL();
       await cdo.connect(mezzVault).requestWithdraw(
-        MEZZ, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        MEZZ, 1_000n * E18, beneficiary.address, 0,
       );
       const reserveAfter = await accounting.s_reserveTVL();
       // 10 bps of 1K = 1 USDai
@@ -339,7 +336,7 @@ describe("PrimeCDO — Withdrawals", () => {
   describe("fee calculation", () => {
     it("should charge 0 fee for Senior (always instant)", async () => {
       const result = await cdo.connect(seniorVault).requestWithdraw.staticCall(
-        SENIOR, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        SENIOR, 1_000n * E18, beneficiary.address, 0,
       );
       expect(result.feeAmount).to.equal(0);
     });
@@ -351,7 +348,7 @@ describe("PrimeCDO — Withdrawals", () => {
       await cdo.connect(mezzVault).deposit(MEZZ, await mockUSDai.getAddress(), 500n * E18);
 
       const result = await cdo.connect(mezzVault).requestWithdraw.staticCall(
-        MEZZ, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        MEZZ, 1_000n * E18, beneficiary.address, 0,
       );
       // 10 bps of 1K = 1
       expect(result.feeAmount).to.equal(1n * E18);
@@ -371,7 +368,7 @@ describe("PrimeCDO — Withdrawals", () => {
 
       // Request withdrawal → ERC20Cooldown
       await cdo.connect(mezzVault).requestWithdraw(
-        MEZZ, 1_000n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        MEZZ, 1_000n * E18, beneficiary.address, 0,
       );
 
       // Wait for cooldown
@@ -390,7 +387,7 @@ describe("PrimeCDO — Withdrawals", () => {
       await cdo.connect(mezzVault).deposit(MEZZ, await mockUSDai.getAddress(), 500n * E18);
 
       await cdo.connect(mezzVault).requestWithdraw(
-        MEZZ, 500n * E18, await mockSUSDai.getAddress(), beneficiary.address, 0,
+        MEZZ, 500n * E18, beneficiary.address, 0,
       );
 
       // Try to claim immediately (should fail)
@@ -422,7 +419,7 @@ describe("PrimeCDO — Withdrawals", () => {
       expect(await cdo.s_shortfallPaused()).to.be.true;
 
       await expect(
-        cdo.connect(seniorVault).requestWithdraw(SENIOR, 100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0),
+        cdo.connect(seniorVault).requestWithdraw(SENIOR, 100n * E18, beneficiary.address, 0),
       ).to.be.revertedWithCustomError(cdo, "PrimeVaults__ShortfallPaused");
     });
 
@@ -441,7 +438,7 @@ describe("PrimeCDO — Withdrawals", () => {
       expect(await cdo.s_shortfallPaused()).to.be.true;
 
       await expect(
-        cdo.connect(mezzVault).requestWithdraw(MEZZ, 100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0),
+        cdo.connect(mezzVault).requestWithdraw(MEZZ, 100n * E18, beneficiary.address, 0),
       ).to.be.revertedWithCustomError(cdo, "PrimeVaults__ShortfallPaused");
     });
 
@@ -461,7 +458,7 @@ describe("PrimeCDO — Withdrawals", () => {
       const jrSigner = await ethers.getImpersonatedSigner(mockJrVaultAddr);
       await ethers.provider.send("hardhat_setBalance", [mockJrVaultAddr, "0x56BC75E2D63100000"]);
       await expect(
-        cdo.connect(jrSigner).withdrawJunior(100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0, 0),
+        cdo.connect(jrSigner).withdrawJunior(100n * E18, beneficiary.address, 0, 0),
       ).to.be.revertedWithCustomError(cdo, "PrimeVaults__ShortfallPaused");
     });
   });
@@ -474,7 +471,7 @@ describe("PrimeCDO — Withdrawals", () => {
     it("should revert requestWithdraw from non-tranche caller", async () => {
       await expect(
         cdo.connect(beneficiary).requestWithdraw(
-          SENIOR, 100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0,
+          SENIOR, 100n * E18, beneficiary.address, 0,
         ),
       ).to.be.revertedWithCustomError(cdo, "PrimeVaults__Unauthorized");
     });
@@ -482,7 +479,7 @@ describe("PrimeCDO — Withdrawals", () => {
     it("should revert requestWithdraw with zero amount", async () => {
       await expect(
         cdo.connect(seniorVault).requestWithdraw(
-          SENIOR, 0, await mockUSDai.getAddress(), beneficiary.address, 0,
+          SENIOR, 0, beneficiary.address, 0,
         ),
       ).to.be.revertedWithCustomError(cdo, "PrimeVaults__ZeroAmount");
     });
@@ -490,7 +487,7 @@ describe("PrimeCDO — Withdrawals", () => {
     it("should revert withdrawJunior from non-Junior vault", async () => {
       await expect(
         cdo.connect(seniorVault).withdrawJunior(
-          100n * E18, await mockUSDai.getAddress(), beneficiary.address, 0, 0,
+          100n * E18, beneficiary.address, 0, 0,
         ),
       ).to.be.revertedWithCustomError(cdo, "PrimeVaults__Unauthorized");
     });

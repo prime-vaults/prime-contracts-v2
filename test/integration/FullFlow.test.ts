@@ -43,8 +43,6 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
   let redemptionPolicy: any;
   let erc20Cooldown: any;
   let sharesCooldown: any;
-  let unstakeCooldown: any;
-  let cooldownImpl: any;
   let aprProvider: any;
   let aprFeed: any;
   let seniorVault: any;
@@ -175,17 +173,6 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
     const RPFactory = await ethers.getContractFactory("RedemptionPolicy");
     redemptionPolicy = await RPFactory.deploy(deployer.address, await accounting.getAddress());
 
-    // UnstakeCooldown
-    const UCFactory = await ethers.getContractFactory("UnstakeCooldown");
-    unstakeCooldown = await UCFactory.deploy(deployer.address);
-
-    // SUSDaiCooldownRequestImpl
-    const ImplFactory = await ethers.getContractFactory("SUSDaiCooldownRequestImpl");
-    cooldownImpl = await ImplFactory.deploy(SUSDAI, USDAI, await unstakeCooldown.getAddress());
-
-    // Register impl in UnstakeCooldown (sUSDai token → impl)
-    await unstakeCooldown.connect(deployer).setImplementation(SUSDAI, await cooldownImpl.getAddress());
-
     // Predict CDO address: Strategy(+0), Adapter(+1), CDO(+2)
     const nonceBefore = await ethers.provider.getTransactionCount(deployer.address);
     const predictedCDO = ethers.getCreateAddress({ from: deployer.address, nonce: nonceBefore + 2 });
@@ -194,7 +181,7 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
     const StratFactory = await ethers.getContractFactory("SUSDaiStrategy");
     strategy = await StratFactory.deploy(
       predictedCDO, USDAI, SUSDAI,
-      await unstakeCooldown.getAddress(), deployer.address,
+      deployer.address,
     );
 
     // AaveWETHAdapter (real Aave v3 Pool)
@@ -211,7 +198,7 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
       await adapter.getAddress(), await oracle.getAddress(), ethers.ZeroAddress,
       WETH,
       await redemptionPolicy.getAddress(), await erc20Cooldown.getAddress(),
-      await sharesCooldown.getAddress(), deployer.address,
+      await sharesCooldown.getAddress(), SUSDAI, deployer.address,
     );
     expect(await cdo.getAddress()).to.equal(predictedCDO);
 
@@ -243,7 +230,6 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
     // Authorize CDO in cooldown contracts
     await erc20Cooldown.connect(deployer).setAuthorized(await cdo.getAddress(), true);
     await sharesCooldown.connect(deployer).setAuthorized(await cdo.getAddress(), true);
-    await unstakeCooldown.connect(deployer).setAuthorized(await strategy.getAddress(), true);
 
     // Fund test users with USDai
     await findAndTransferUSDai(userA.address, 20_000n * E18);
@@ -338,7 +324,7 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
 
     // Static call to preview
     const tx = await seniorVault.connect(userA).requestWithdraw(
-      halfShares, USDAI, userA.address,
+      halfShares, userA.address,
     );
     const receipt = await tx.wait();
 
@@ -364,22 +350,6 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
       return;
     }
 
-    // Get pending redemptions for the cooldown impl
-    const implAddr = await cooldownImpl.getAddress();
-    try {
-      const ids = await sUSDai.redemptionIds(implAddr);
-      for (const id of ids) {
-        try {
-          await sUSDai.connect(admin).serviceRedemptions(id);
-        } catch {
-          // May already be serviced or different admin role needed
-        }
-      }
-    } catch {
-      console.log("    ⚠ Could not service redemptions — queue may be empty or different ABI");
-    }
-
-    // Try to claim via the CDO/vault
     // Check if there are pending requests for userA in erc20Cooldown
     const pending = await erc20Cooldown.getPendingRequests(userA.address);
     if (pending.length > 0) {
@@ -404,7 +374,7 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
     const wethBefore = await weth.balanceOf(userC.address);
 
     await juniorVault.connect(userC).requestWithdraw(
-      halfShares, USDAI, userC.address,
+      halfShares, userC.address,
     );
 
     // WETH portion should have been sent instantly
@@ -424,16 +394,6 @@ describeOrSkip("Integration — Full Flow (Arbitrum Fork)", function () {
       console.log("    ⚠ Could not find sUSDai admin — skipping");
       return;
     }
-
-    const implAddr = await cooldownImpl.getAddress();
-    try {
-      const ids = await sUSDai.redemptionIds(implAddr);
-      for (const id of ids) {
-        try {
-          await sUSDai.connect(admin).serviceRedemptions(id);
-        } catch { /* already serviced */ }
-      }
-    } catch { /* different ABI */ }
 
     // Try claiming
     const pending = await erc20Cooldown.getPendingRequests(userC.address);

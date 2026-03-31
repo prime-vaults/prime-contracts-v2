@@ -105,7 +105,7 @@ describe("PrimeLens — Read-only aggregator", () => {
       await adapter.getAddress(), await oracle.getAddress(), ethers.ZeroAddress,
       await mockWeth.getAddress(),
       await redemptionPolicy.getAddress(), await erc20Cooldown.getAddress(),
-      await sharesCooldown.getAddress(), owner.address,
+      await sharesCooldown.getAddress(), ethers.ZeroAddress, owner.address,
     );
 
     // --- Deploy TrancheVaults ---

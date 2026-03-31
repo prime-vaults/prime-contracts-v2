@@ -1,12 +1,11 @@
 /**
- * Deploy Step 01 — Shared contracts (cross-market)
+ * Deploy Step 01 — Shared infrastructure (reusable across markets)
  *
  * Deploys: RiskParams, WETHPriceOracle, SwapFacility,
- *          ERC20Cooldown, UnstakeCooldown, SharesCooldown
+ *          ERC20Cooldown, SharesCooldown
  *
  * Usage:
  *   npx hardhat run deploy/01_deploy_shared.ts --network arbitrum
- *   ARB_RPC_URL=<url> npx hardhat run deploy/01_deploy_shared.ts
  */
 
 import hre from "hardhat";
@@ -22,28 +21,28 @@ async function main() {
   //  1. RiskParams
   // ═══════════════════════════════════════════════════════════════════
 
-  const RiskParamsFactory = await hre.ethers.getContractFactory("RiskParams");
-  const riskParams = await RiskParamsFactory.deploy(deployer.address);
+  const RiskFactory = await hre.ethers.getContractFactory("RiskParams");
+  const riskParams = await RiskFactory.deploy(deployer.address);
   await riskParams.waitForDeployment();
   const riskParamsAddr = await riskParams.getAddress();
   console.log(`  RiskParams:        ${riskParamsAddr}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  //  2. WETHPriceOracle (Chainlink ETH/USD)
+  //  2. WETHPriceOracle
   // ═══════════════════════════════════════════════════════════════════
 
   const OracleFactory = await hre.ethers.getContractFactory("WETHPriceOracle");
-  const wethPriceOracle = await OracleFactory.deploy(ARBITRUM.CHAINLINK_ETH_USD);
-  await wethPriceOracle.waitForDeployment();
-  const wethPriceOracleAddr = await wethPriceOracle.getAddress();
-  console.log(`  WETHPriceOracle:   ${wethPriceOracleAddr}`);
+  const wethOracle = await OracleFactory.deploy(ARBITRUM.CHAINLINK_ETH_USD);
+  await wethOracle.waitForDeployment();
+  const wethOracleAddr = await wethOracle.getAddress();
+  console.log(`  WETHPriceOracle:   ${wethOracleAddr}`);
 
-  // Seed first price
-  await (await wethPriceOracle.recordPrice()).wait();
-  console.log(`    → recordPrice() done`);
+  // Seed first price point for TWAP
+  await (await wethOracle.recordPrice()).wait();
+  console.log(`  ✓ WETHPriceOracle.recordPrice() — initial seed`);
 
   // ═══════════════════════════════════════════════════════════════════
-  //  3. SwapFacility (Uniswap V3)
+  //  3. SwapFacility
   // ═══════════════════════════════════════════════════════════════════
 
   const SwapFactory = await hre.ethers.getContractFactory("SwapFacility");
@@ -60,24 +59,14 @@ async function main() {
 
   const ERC20CooldownFactory = await hre.ethers.getContractFactory("ERC20Cooldown");
   const erc20Cooldown = await ERC20CooldownFactory.deploy(
-    deployer.address, DEFAULTS.ERC20_COOLDOWN_DURATION, DEFAULTS.ERC20_COOLDOWN_EXPIRY,
+    deployer.address, DEFAULTS.ERC20_COOLDOWN_DURATION,
   );
   await erc20Cooldown.waitForDeployment();
   const erc20CooldownAddr = await erc20Cooldown.getAddress();
   console.log(`  ERC20Cooldown:     ${erc20CooldownAddr}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  //  5. UnstakeCooldown
-  // ═══════════════════════════════════════════════════════════════════
-
-  const UnstakeCooldownFactory = await hre.ethers.getContractFactory("UnstakeCooldown");
-  const unstakeCooldown = await UnstakeCooldownFactory.deploy(deployer.address);
-  await unstakeCooldown.waitForDeployment();
-  const unstakeCooldownAddr = await unstakeCooldown.getAddress();
-  console.log(`  UnstakeCooldown:   ${unstakeCooldownAddr}`);
-
-  // ═══════════════════════════════════════════════════════════════════
-  //  6. SharesCooldown
+  //  5. SharesCooldown
   // ═══════════════════════════════════════════════════════════════════
 
   const SharesCooldownFactory = await hre.ethers.getContractFactory("SharesCooldown");
@@ -94,10 +83,9 @@ async function main() {
 
   saveDeployed({
     riskParams: riskParamsAddr,
-    wethPriceOracle: wethPriceOracleAddr,
+    wethPriceOracle: wethOracleAddr,
     swapFacility: swapFacilityAddr,
     erc20Cooldown: erc20CooldownAddr,
-    unstakeCooldown: unstakeCooldownAddr,
     sharesCooldown: sharesCooldownAddr,
   });
 

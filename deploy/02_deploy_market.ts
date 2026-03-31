@@ -1,14 +1,17 @@
 /**
  * Deploy Step 02 — sUSDai Market contracts
  *
- * Deploys: SUSDaiAprPairProvider, AprPairFeed, Accounting,
- *          SUSDaiStrategy, SUSDaiCooldownRequestImpl,
- *          AaveWETHAdapter, RedemptionPolicy, PrimeCDO, TrancheVault × 3
+ * Deploys: SUSDaiAprPairProvider, AprPairFeed, Accounting, RedemptionPolicy,
+ *          SUSDaiStrategy, AaveWETHAdapter, PrimeCDO, TrancheVault × 3
  *
  * Requires: deploy/01_deploy_shared.ts has been run (reads deployed.json).
  *
+ * Note: Strategy, Adapter, and CDO form a circular dependency (Strategy/Adapter
+ *       need CDO address in constructor). We predict CDO address via CREATE nonce.
+ *       Deploy order: Strategy(+0) → Adapter(+1) → CDO(+2).
+ *
  * Usage:
- *   npx hardhat run deploy/02_deploy_usdai_market.ts --network arbitrum
+ *   npx hardhat run deploy/02_deploy_market.ts --network arbitrum
  */
 
 import hre from "hardhat";
@@ -62,57 +65,39 @@ async function main() {
   console.log(`  RedemptionPolicy:  ${redemptionPolicyAddr}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  //  5. SUSDaiCooldownRequestImpl
-  // ═══════════════════════════════════════════════════════════════════
-
-  const ImplFactory = await hre.ethers.getContractFactory("SUSDaiCooldownRequestImpl");
-  const cooldownImpl = await ImplFactory.deploy(ARBITRUM.SUSDAI, ARBITRUM.USDAI, shared.unstakeCooldown);
-  await cooldownImpl.waitForDeployment();
-  const cooldownImplAddr = await cooldownImpl.getAddress();
-  console.log(`  CooldownImpl:      ${cooldownImplAddr}`);
-
-  // ═══════════════════════════════════════════════════════════════════
-  //  6. Predict CDO address for Strategy + Adapter constructors
+  //  5. Predict CDO address: Strategy(+0), Adapter(+1), CDO(+2)
   // ═══════════════════════════════════════════════════════════════════
 
   const nonceBefore = await hre.ethers.provider.getTransactionCount(deployer.address);
-  // Strategy (+0), Adapter (+1), CDO (+2)
   const predictedCDO = hre.ethers.getCreateAddress({ from: deployer.address, nonce: nonceBefore + 2 });
   console.log(`  PrimeCDO (pred):   ${predictedCDO}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  //  7. SUSDaiStrategy
+  //  6. SUSDaiStrategy
   // ═══════════════════════════════════════════════════════════════════
 
   const StratFactory = await hre.ethers.getContractFactory("SUSDaiStrategy");
   const strategy = await StratFactory.deploy(
-    predictedCDO,
-    ARBITRUM.USDAI,
-    ARBITRUM.SUSDAI,
-    shared.unstakeCooldown,
-    deployer.address,
+    predictedCDO, ARBITRUM.USDAI, ARBITRUM.SUSDAI, deployer.address,
   );
   await strategy.waitForDeployment();
   const strategyAddr = await strategy.getAddress();
   console.log(`  SUSDaiStrategy:    ${strategyAddr}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  //  8. AaveWETHAdapter
+  //  7. AaveWETHAdapter
   // ═══════════════════════════════════════════════════════════════════
 
   const AdapterFactory = await hre.ethers.getContractFactory("AaveWETHAdapter");
   const aaveAdapter = await AdapterFactory.deploy(
-    ARBITRUM.AAVE_V3_POOL,
-    ARBITRUM.WETH,
-    shared.wethPriceOracle,
-    predictedCDO,
+    ARBITRUM.AAVE_V3_POOL, ARBITRUM.WETH, shared.wethPriceOracle, predictedCDO,
   );
   await aaveAdapter.waitForDeployment();
   const aaveAdapterAddr = await aaveAdapter.getAddress();
   console.log(`  AaveWETHAdapter:   ${aaveAdapterAddr}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  //  9. PrimeCDO
+  //  8. PrimeCDO
   // ═══════════════════════════════════════════════════════════════════
 
   const CDOFactory = await hre.ethers.getContractFactory("PrimeCDO");
@@ -126,6 +111,7 @@ async function main() {
     redemptionPolicyAddr,
     shared.erc20Cooldown,
     shared.sharesCooldown,
+    ARBITRUM.SUSDAI,
     deployer.address,
   );
   await primeCDO.waitForDeployment();
@@ -137,42 +123,27 @@ async function main() {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  //  10. TrancheVault × 3
+  //  9. TrancheVault × 3
   // ═══════════════════════════════════════════════════════════════════
 
   const VaultFactory = await hre.ethers.getContractFactory("TrancheVault");
 
   const seniorVault = await VaultFactory.deploy(
-    primeCDOAddr,
-    0,
-    ARBITRUM.USDAI,
-    ARBITRUM.WETH,
-    "Prime Senior sUSDai",
-    "srUSDai",
+    primeCDOAddr, 0, ARBITRUM.USDAI, ARBITRUM.WETH, "Prime Senior sUSDai", "srUSDai",
   );
   await seniorVault.waitForDeployment();
   const seniorVaultAddr = await seniorVault.getAddress();
   console.log(`  SeniorVault:       ${seniorVaultAddr}`);
 
   const mezzVault = await VaultFactory.deploy(
-    primeCDOAddr,
-    1,
-    ARBITRUM.USDAI,
-    ARBITRUM.WETH,
-    "Prime Mezzanine sUSDai",
-    "mzUSDai",
+    primeCDOAddr, 1, ARBITRUM.USDAI, ARBITRUM.WETH, "Prime Mezzanine sUSDai", "mzUSDai",
   );
   await mezzVault.waitForDeployment();
   const mezzVaultAddr = await mezzVault.getAddress();
   console.log(`  MezzVault:         ${mezzVaultAddr}`);
 
   const juniorVault = await VaultFactory.deploy(
-    primeCDOAddr,
-    2,
-    ARBITRUM.USDAI,
-    ARBITRUM.WETH,
-    "Prime Junior sUSDai",
-    "jrUSDai",
+    primeCDOAddr, 2, ARBITRUM.USDAI, ARBITRUM.WETH, "Prime Junior sUSDai", "jrUSDai",
   );
   await juniorVault.waitForDeployment();
   const juniorVaultAddr = await juniorVault.getAddress();
@@ -187,7 +158,6 @@ async function main() {
     aprFeed: aprFeedAddr,
     accounting: accountingAddr,
     strategy: strategyAddr,
-    cooldownImpl: cooldownImplAddr,
     aaveAdapter: aaveAdapterAddr,
     redemptionPolicy: redemptionPolicyAddr,
     primeCDO: primeCDOAddr,
@@ -196,7 +166,8 @@ async function main() {
     juniorVault: juniorVaultAddr,
   });
 
-  console.log(`\n  ✓ sUSDai market deployed. Saved to deploy/deployed.json\n`);
+  console.log(`\n  ✓ sUSDai market deployed. Saved to deploy/deployed.json`);
+  console.log(`  Next: npx hardhat run deploy/03_configure.ts --network arbitrum\n`);
 }
 
 main().catch((err) => {

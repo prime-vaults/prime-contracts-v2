@@ -12,8 +12,7 @@ enum CooldownStatus {
     NONE,
     PENDING,
     CLAIMABLE,
-    CLAIMED,
-    EXPIRED
+    CLAIMED
 }
 
 /** @notice Tracks a pending cooldown withdrawal request */
@@ -23,7 +22,6 @@ struct CooldownRequest {
     uint256 amount;
     uint256 requestTime;
     uint256 unlockTime;
-    uint256 expiryTime;
     CooldownStatus status;
 }
 
@@ -31,7 +29,7 @@ struct CooldownRequest {
  * @title ICooldownHandler
  * @notice Interface for cooldown-based withdrawal mechanisms
  * @dev Shared across all markets. Request IDs must be globally unique.
- *      Implementations: ERC20Cooldown, UnstakeCooldown, SharesCooldown.
+ *      Implementations: ERC20Cooldown, SharesCooldown.
  */
 interface ICooldownHandler {
     // ═══════════════════════════════════════════════════════════════════
@@ -57,12 +55,6 @@ interface ICooldownHandler {
      */
     event CooldownClaimed(uint256 indexed requestId, address indexed beneficiary, address token, uint256 amountOut);
 
-    /**
-     * @notice Emitted when a cooldown request expires without being claimed
-     * @param requestId The expired request ID
-     */
-    event CooldownExpired(uint256 indexed requestId);
-
     // ═══════════════════════════════════════════════════════════════════
     //  MUTATIVE
     // ═══════════════════════════════════════════════════════════════════
@@ -79,7 +71,7 @@ interface ICooldownHandler {
 
     /**
      * @notice Claim a completed cooldown request and transfer tokens to beneficiary
-     * @dev Reverts if cooldown period has not elapsed or request already claimed/expired.
+     * @dev Reverts if cooldown period has not elapsed or request already claimed.
      * @param requestId The request to claim
      * @return amountOut Actual amount transferred to beneficiary
      */
@@ -92,7 +84,7 @@ interface ICooldownHandler {
     /**
      * @notice Check whether a cooldown request can be claimed now
      * @param requestId The request to check
-     * @return true if the request is past its unlock time and not yet claimed/expired
+     * @return true if the request is past its unlock time and not yet claimed
      */
     function isClaimable(uint256 requestId) external view returns (bool);
 
@@ -104,7 +96,7 @@ interface ICooldownHandler {
     function getRequest(uint256 requestId) external view returns (CooldownRequest memory);
 
     /**
-     * @notice Get all pending (unclaimed, unexpired) request IDs for a beneficiary
+     * @notice Get all pending (unclaimed) request IDs for a beneficiary
      * @param beneficiary Address to query
      * @return Array of request IDs
      */

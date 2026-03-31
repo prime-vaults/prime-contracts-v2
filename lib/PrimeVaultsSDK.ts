@@ -1,14 +1,15 @@
 import {
   createPublicClient,
   http,
+  decodeEventLog,
   type PublicClient,
   type WalletClient,
   type Address,
-  type Hash,
   formatUnits,
   parseUnits,
 } from "viem";
 import { PRIME_LENS_ABI, TRANCHE_VAULT_ABI, ERC20_ABI } from "./abis";
+import { CooldownType } from "./types";
 import type {
   PrimeVaultsConfig,
   ContractAddresses,
@@ -22,6 +23,7 @@ import type {
   CDOWithdrawResult,
   UserPortfolio,
   WriteResult,
+  WithdrawRequestResult,
   EstimateJuniorWithdraw,
 } from "./types";
 
@@ -53,18 +55,13 @@ export class PrimeVaultsSDK {
     return map[tranche] as Address;
   }
 
-  private _requireLens(): Address {
-    if (!this.addresses.primeLens) throw new Error("primeLens address not configured");
-    return this.addresses.primeLens as Address;
-  }
-
   // ═══════════════════════════════════════════════════════════════════
   //  READ — PrimeLens (aggregated views)
   // ═══════════════════════════════════════════════════════════════════
 
   async getAllTranches(): Promise<{ senior: TrancheInfo; mezz: TrancheInfo; junior: TrancheInfo }> {
     const result = await this.publicClient.readContract({
-      address: this._requireLens(),
+      address: this.addresses.primeLens as Address,
       abi: PRIME_LENS_ABI,
       functionName: "getAllTranches",
     });
@@ -83,7 +80,7 @@ export class PrimeVaultsSDK {
 
   async getTrancheInfo(tranche: TrancheId): Promise<TrancheInfo> {
     const result = await this.publicClient.readContract({
-      address: this._requireLens(),
+      address: this.addresses.primeLens as Address,
       abi: PRIME_LENS_ABI,
       functionName: "getTrancheInfo",
       args: [TRANCHE_MAP[tranche]],
@@ -102,7 +99,7 @@ export class PrimeVaultsSDK {
 
   async getJuniorPosition(): Promise<JuniorPosition> {
     const result = await this.publicClient.readContract({
-      address: this._requireLens(),
+      address: this.addresses.primeLens as Address,
       abi: PRIME_LENS_ABI,
       functionName: "getJuniorPosition",
     });
@@ -120,7 +117,7 @@ export class PrimeVaultsSDK {
 
   async getProtocolHealth(): Promise<ProtocolHealth> {
     const result = await this.publicClient.readContract({
-      address: this._requireLens(),
+      address: this.addresses.primeLens as Address,
       abi: PRIME_LENS_ABI,
       functionName: "getProtocolHealth",
     });
@@ -141,7 +138,7 @@ export class PrimeVaultsSDK {
 
   async getUserPendingWithdraws(user: string): Promise<PendingWithdraw[]> {
     const result = await this.publicClient.readContract({
-      address: this._requireLens(),
+      address: this.addresses.primeLens as Address,
       abi: PRIME_LENS_ABI,
       functionName: "getUserPendingWithdraws",
       args: [user as Address],
@@ -153,7 +150,6 @@ export class PrimeVaultsSDK {
       token: raw.token,
       amount: raw.amount,
       unlockTime: raw.unlockTime,
-      expiryTime: raw.expiryTime,
       status: raw.status,
       isClaimable: raw.isClaimable,
       timeRemaining: raw.timeRemaining,
@@ -162,7 +158,7 @@ export class PrimeVaultsSDK {
 
   async getClaimableWithdraws(user: string): Promise<PendingWithdraw[]> {
     const result = await this.publicClient.readContract({
-      address: this._requireLens(),
+      address: this.addresses.primeLens as Address,
       abi: PRIME_LENS_ABI,
       functionName: "getClaimableWithdraws",
       args: [user as Address],
@@ -174,7 +170,6 @@ export class PrimeVaultsSDK {
       token: raw.token,
       amount: raw.amount,
       unlockTime: raw.unlockTime,
-      expiryTime: raw.expiryTime,
       status: raw.status,
       isClaimable: raw.isClaimable,
       timeRemaining: raw.timeRemaining,
@@ -183,7 +178,7 @@ export class PrimeVaultsSDK {
 
   async previewWithdrawCondition(tranche: TrancheId): Promise<WithdrawCondition> {
     const result = await this.publicClient.readContract({
-      address: this._requireLens(),
+      address: this.addresses.primeLens as Address,
       abi: PRIME_LENS_ABI,
       functionName: "previewWithdrawCondition",
       args: [TRANCHE_MAP[tranche]],
@@ -200,7 +195,7 @@ export class PrimeVaultsSDK {
 
   async getWETHRebalanceStatus(): Promise<RebalanceStatus> {
     const result = await this.publicClient.readContract({
-      address: this._requireLens(),
+      address: this.addresses.primeLens as Address,
       abi: PRIME_LENS_ABI,
       functionName: "getWETHRebalanceStatus",
     });
@@ -374,11 +369,16 @@ export class PrimeVaultsSDK {
     return { hash, gasEstimate, gasPrice, estimatedFeeWei: gasEstimate * gasPrice };
   }
 
-  async deposit(walletClient: WalletClient, tranche: TrancheId, assets: bigint, receiver: string): Promise<WriteResult> {
-    return this._estimateAndSend(
-      walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "deposit",
-      [assets, receiver as Address],
-    );
+  async deposit(
+    walletClient: WalletClient,
+    tranche: TrancheId,
+    assets: bigint,
+    receiver: string,
+  ): Promise<WriteResult> {
+    return this._estimateAndSend(walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "deposit", [
+      assets,
+      receiver as Address,
+    ]);
   }
 
   async depositJunior(
@@ -388,7 +388,10 @@ export class PrimeVaultsSDK {
     receiver: string,
   ): Promise<WriteResult> {
     return this._estimateAndSend(
-      walletClient, this.addresses.juniorVault as Address, TRANCHE_VAULT_ABI, "depositJunior",
+      walletClient,
+      this.addresses.juniorVault as Address,
+      TRANCHE_VAULT_ABI,
+      "depositJunior",
       [baseAmount, wethAmount, receiver as Address],
     );
   }
@@ -397,17 +400,93 @@ export class PrimeVaultsSDK {
   //  WRITE — Withdraw
   // ═══════════════════════════════════════════════════════════════════
 
+  /**
+   * Request withdrawal from a tranche. Always withdraws sUSDai (hardcoded in CDO).
+   * Junior withdrawals also include proportional WETH (follows same mechanism).
+   *
+   * nextAction types:
+   *   - DONE: instant — sUSDai (+ WETH for Junior) received
+   *   - CLAIM_COOLDOWN: ASSETS_LOCK — sUSDai + WETH locked in ERC20Cooldown, show timer
+   *   - CLAIM_SHARES: SHARES_LOCK — shares escrowed (yield accrues), show timer
+   */
   async requestWithdraw(
     walletClient: WalletClient,
     tranche: TrancheId,
     shares: bigint,
-    outputToken: string,
-    receiver: string,
-  ): Promise<WriteResult> {
-    return this._estimateAndSend(
-      walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "requestWithdraw",
-      [shares, outputToken as Address, receiver as Address],
-    );
+    receiver?: string,
+  ): Promise<WithdrawRequestResult> {
+    const account = walletClient.account!;
+    const resolvedReceiver = (receiver ?? account.address) as Address;
+
+    const vaultAddress = this._vaultAddress(tranche);
+    const writeResult = await this._estimateAndSend(walletClient, vaultAddress, TRANCHE_VAULT_ABI, "requestWithdraw", [
+      shares,
+      resolvedReceiver,
+    ]);
+
+    // Wait for receipt and parse WithdrawRequested event
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: writeResult.hash as `0x${string}` });
+
+    let withdrawResult: CDOWithdrawResult = {
+      isInstant: false,
+      amountOut: 0n,
+      cooldownId: 0n,
+      cooldownHandler: "0x",
+      unlockTime: 0n,
+      feeAmount: 0n,
+      appliedCooldownType: CooldownType.NONE,
+      wethAmount: 0n,
+      wethCooldownId: 0n,
+    };
+
+    for (const log of receipt.logs) {
+      try {
+        const decoded = decodeEventLog({ abi: TRANCHE_VAULT_ABI, data: log.data, topics: log.topics });
+        if (decoded.eventName === "WithdrawRequested") {
+          const r = (decoded.args as any).result;
+          withdrawResult = {
+            isInstant: r.isInstant,
+            amountOut: r.amountOut,
+            cooldownId: r.cooldownId,
+            cooldownHandler: r.cooldownHandler,
+            unlockTime: r.unlockTime,
+            feeAmount: r.feeAmount,
+            appliedCooldownType: Number(r.appliedCooldownType),
+            wethAmount: r.wethAmount ?? 0n,
+            wethCooldownId: r.wethCooldownId ?? 0n,
+          };
+          break;
+        }
+      } catch {
+        // not our event, skip
+      }
+    }
+
+    // Determine next action for FE
+    let nextAction: WithdrawRequestResult["nextAction"];
+
+    if (withdrawResult.isInstant) {
+      // Instant: sUSDai + WETH sent directly
+      nextAction = { type: "DONE" };
+    } else if (withdrawResult.appliedCooldownType === CooldownType.SHARES_LOCK) {
+      // SHARES_LOCK: shares escrowed, WETH stays in Aave — both released at claim
+      nextAction = {
+        type: "CLAIM_SHARES",
+        cooldownId: withdrawResult.cooldownId,
+        unlockTime: withdrawResult.unlockTime,
+      };
+    } else {
+      // ASSETS_LOCK: sUSDai + WETH both locked in ERC20Cooldown
+      nextAction = {
+        type: "CLAIM_COOLDOWN",
+        cooldownId: withdrawResult.cooldownId,
+        cooldownHandler: withdrawResult.cooldownHandler,
+        unlockTime: withdrawResult.unlockTime,
+        wethCooldownId: withdrawResult.wethCooldownId,
+      };
+    }
+
+    return { ...writeResult, withdrawResult, nextAction };
   }
 
   async claimWithdraw(
@@ -416,22 +495,16 @@ export class PrimeVaultsSDK {
     cooldownId: bigint,
     cooldownHandler: string,
   ): Promise<WriteResult> {
-    return this._estimateAndSend(
-      walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "claimWithdraw",
-      [cooldownId, cooldownHandler as Address],
-    );
+    return this._estimateAndSend(walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "claimWithdraw", [
+      cooldownId,
+      cooldownHandler as Address,
+    ]);
   }
 
-  async claimSharesWithdraw(
-    walletClient: WalletClient,
-    tranche: TrancheId,
-    cooldownId: bigint,
-    outputToken: string,
-  ): Promise<WriteResult> {
-    return this._estimateAndSend(
-      walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "claimSharesWithdraw",
-      [cooldownId, outputToken as Address],
-    );
+  async claimSharesWithdraw(walletClient: WalletClient, tranche: TrancheId, cooldownId: bigint): Promise<WriteResult> {
+    return this._estimateAndSend(walletClient, this._vaultAddress(tranche), TRANCHE_VAULT_ABI, "claimSharesWithdraw", [
+      cooldownId,
+    ]);
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -439,10 +512,7 @@ export class PrimeVaultsSDK {
   // ═══════════════════════════════════════════════════════════════════
 
   async approveToken(walletClient: WalletClient, token: string, spender: string, amount: bigint): Promise<WriteResult> {
-    return this._estimateAndSend(
-      walletClient, token as Address, ERC20_ABI, "approve",
-      [spender as Address, amount],
-    );
+    return this._estimateAndSend(walletClient, token as Address, ERC20_ABI, "approve", [spender as Address, amount]);
   }
 
   async approveVaultDeposit(
@@ -462,27 +532,27 @@ export class PrimeVaultsSDK {
    * Estimate Junior withdraw output for a given share amount.
    * Junior withdrawals return both base assets (with fee) and proportional WETH.
    *
-   * Base: shares → assets via previewRedeem, then fee = assets * feeBps / 10_000
-   * WETH: proportional = totalWETH * shares / totalJuniorShares
+   * Base: shares × juniorBaseTVL / totalSupply (excludes WETH TVL)
+   * WETH: proportional = totalWETH × shares / totalSupply
    *
    * @param shares Junior vault shares to withdraw (18 decimals)
    * @returns Breakdown of base amount, fee, net, WETH amount, mechanism, cooldown
    */
   async estimateJuniorWithdraw(shares: bigint): Promise<EstimateJuniorWithdraw> {
-    const [baseAmount, condition, juniorPos, totalSupply] = await Promise.all([
-      this.previewRedeem("JUNIOR", shares),
+    const [condition, juniorPos, totalSupply] = await Promise.all([
       this.previewWithdrawCondition("JUNIOR"),
       this.getJuniorPosition(),
       this.getTotalSupply("JUNIOR"),
     ]);
 
+    // Base amount = only base portion (exclude WETH TVL to avoid double-counting)
+    const baseAmount = totalSupply > 0n ? (shares * juniorPos.baseTVL) / totalSupply : 0n;
     const feeAmount = (baseAmount * condition.feeBps) / 10_000n;
     const netBaseAmount = baseAmount - feeAmount;
 
     const wethAmount = totalSupply > 0n ? (juniorPos.wethAmount * shares) / totalSupply : 0n;
-    const wethValueUSD = juniorPos.wethPrice > 0n
-      ? (wethAmount * juniorPos.wethPrice) / 1_000_000_000_000_000_000n
-      : 0n;
+    const wethValueUSD =
+      juniorPos.wethPrice > 0n ? (wethAmount * juniorPos.wethPrice) / 1_000_000_000_000_000_000n : 0n;
 
     return {
       baseAmount,
@@ -513,13 +583,10 @@ export class PrimeVaultsSDK {
   }> {
     const PRECISION = 1_000_000_000_000_000_000n; // 1e18
 
-    const [rebalance, juniorPos] = await Promise.all([
-      this.getWETHRebalanceStatus(),
-      this.getJuniorPosition(),
-    ]);
+    const [rebalance, juniorPos] = await Promise.all([this.getWETHRebalanceStatus(), this.getJuniorPosition()]);
 
-    const targetRatio = rebalance.targetRatio;   // e.g. 0.20e18 = 20%
-    const wethPrice = juniorPos.wethPrice;        // 18 decimals
+    const targetRatio = rebalance.targetRatio; // e.g. 0.20e18 = 20%
+    const wethPrice = juniorPos.wethPrice; // 18 decimals
 
     // wethValueUSD = baseAmount * targetRatio / (1e18 - targetRatio)
     const wethValueUSD = (baseAmount * targetRatio) / (PRECISION - targetRatio);

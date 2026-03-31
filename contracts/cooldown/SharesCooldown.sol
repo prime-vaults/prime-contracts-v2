@@ -90,7 +90,6 @@ contract SharesCooldown is Ownable2Step, ICooldownHandler {
             amount: amount,
             requestTime: block.timestamp,
             unlockTime: unlockTime,
-            expiryTime: 0, // no expiry for SharesCooldown
             status: CooldownStatus.PENDING
         });
 

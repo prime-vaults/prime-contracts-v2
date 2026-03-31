@@ -3,5 +3,3 @@
 /* eslint-disable */
 import type * as susDaiStrategySol from "./SUSDaiStrategy.sol";
 export type { susDaiStrategySol };
-import type * as cooldown from "./cooldown";
-export type { cooldown };

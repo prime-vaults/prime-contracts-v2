@@ -13,7 +13,7 @@ import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import { IPrimeCDO, TrancheId, CDOWithdrawResult } from "../interfaces/IPrimeCDO.sol";
+import { IPrimeCDO, TrancheId, CooldownType, CDOWithdrawResult } from "../interfaces/IPrimeCDO.sol";
 import { IAccounting } from "../interfaces/IAccounting.sol";
 
 /**
@@ -221,38 +221,44 @@ contract TrancheVault is ERC4626 {
      * @dev Burns shares for NONE/ASSETS_LOCK mechanisms. Escrows shares for SHARES_LOCK.
      *      Senior/Mezz: routes to CDO.requestWithdraw.
      *      Junior: routes to CDO.withdrawJunior (proportional base + WETH).
+     *      Always withdraws the underlying yield token (sUSDai) — no outputToken selection.
      * @param shares Number of vault shares to redeem
-     * @param outputToken Desired output token
      * @param receiver Address to receive withdrawn tokens
      * @return result CDO withdrawal result with mechanism details
      */
     function requestWithdraw(
         uint256 shares,
-        address outputToken,
         address receiver
     ) external returns (CDOWithdrawResult memory result) {
         if (shares == 0) revert PrimeVaults__ZeroShares();
 
         address owner = _msgSender();
-        uint256 baseAmount = convertToAssets(shares);
+        uint256 supply = totalSupply();
+        // Snapshot total value per share before any state changes (for event)
+        uint256 totalValue = supply > 0 ? (shares * totalAssets()) / supply : 0;
 
         // Transfer shares from owner to vault (for CDO to potentially pull in SharesLock)
         _transfer(owner, address(this), shares);
         _approve(address(this), address(i_cdo), shares);
 
         if (i_trancheId == TrancheId.JUNIOR) {
-            result = i_cdo.withdrawJunior(baseAmount, outputToken, receiver, shares, totalSupply());
+            // Junior: baseAmount = only base portion (exclude WETH TVL)
+            // WETH is withdrawn proportionally by CDO.withdrawJunior separately
+            uint256 juniorBaseTVL = IAccounting(i_cdo.accounting()).getJuniorBaseTVL();
+            uint256 baseAmount = supply > 0 ? (shares * juniorBaseTVL) / supply : 0;
+            result = i_cdo.withdrawJunior(baseAmount, receiver, shares, supply);
         } else {
-            result = i_cdo.requestWithdraw(i_trancheId, baseAmount, outputToken, receiver, shares);
+            uint256 baseAmount = supply > 0 ? (shares * totalAssets()) / supply : 0;
+            result = i_cdo.requestWithdraw(i_trancheId, baseAmount, receiver, shares);
         }
 
         // SHARES_LOCK (type 3): CDO already pulled shares for escrow — do NOT burn
         // All other types: CDO did not pull shares — burn them
-        if (result.appliedCooldownType != 3) {
+        if (result.appliedCooldownType != CooldownType.SHARES_LOCK) {
             _burn(address(this), shares);
         }
 
-        emit WithdrawRequested(owner, receiver, shares, baseAmount, result);
+        emit WithdrawRequested(owner, receiver, shares, totalValue, result);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -260,7 +266,7 @@ contract TrancheVault is ERC4626 {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Claim a completed ERC20Cooldown (ASSETS_LOCK) or UnstakeCooldown withdrawal.
+     * @notice Claim a completed ERC20Cooldown (ASSETS_LOCK) withdrawal.
      * @dev Delegates to CDO.claimWithdraw. Callable by anyone.
      * @param cooldownId The cooldown request ID
      * @param cooldownHandler Address of the cooldown handler
@@ -273,12 +279,24 @@ contract TrancheVault is ERC4626 {
     /**
      * @notice Claim a completed SharesCooldown (SHARES_LOCK) withdrawal.
      * @dev Delegates to CDO.claimSharesWithdraw. Callable by anyone.
+     *      Always withdraws the underlying yield token (sUSDai).
+     *      CDO burns the returned shares via burnSharesFrom after processing.
      * @param cooldownId The SharesCooldown request ID
-     * @param outputToken Desired output token
      * @return amountOut Tokens transferred to beneficiary
      */
-    function claimSharesWithdraw(uint256 cooldownId, address outputToken) external returns (uint256 amountOut) {
-        return i_cdo.claimSharesWithdraw(cooldownId, outputToken);
+    function claimSharesWithdraw(uint256 cooldownId) external returns (uint256 amountOut) {
+        return i_cdo.claimSharesWithdraw(cooldownId);
+    }
+
+    /**
+     * @notice Burn shares held by an address. Only callable by the paired CDO.
+     * @dev Used by CDO.claimSharesWithdraw to burn shares returned from SharesCooldown.
+     * @param account Address holding the shares to burn
+     * @param shares Number of shares to burn
+     */
+    function burnSharesFrom(address account, uint256 shares) external {
+        if (msg.sender != address(i_cdo)) revert PrimeVaults__UseRequestWithdraw();
+        _burn(account, shares);
     }
 
     // ═══════════════════════════════════════════════════════════════════

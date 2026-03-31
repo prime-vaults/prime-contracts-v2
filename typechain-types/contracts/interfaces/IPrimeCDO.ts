@@ -29,6 +29,8 @@ export type CDOWithdrawResultStruct = {
   unlockTime: BigNumberish;
   feeAmount: BigNumberish;
   appliedCooldownType: BigNumberish;
+  wethAmount: BigNumberish;
+  wethCooldownId: BigNumberish;
 };
 
 export type CDOWithdrawResultStructOutput = [
@@ -38,7 +40,9 @@ export type CDOWithdrawResultStructOutput = [
   cooldownHandler: string,
   unlockTime: bigint,
   feeAmount: bigint,
-  appliedCooldownType: bigint
+  appliedCooldownType: bigint,
+  wethAmount: bigint,
+  wethCooldownId: bigint
 ] & {
   isInstant: boolean;
   amountOut: bigint;
@@ -47,6 +51,8 @@ export type CDOWithdrawResultStructOutput = [
   unlockTime: bigint;
   feeAmount: bigint;
   appliedCooldownType: bigint;
+  wethAmount: bigint;
+  wethCooldownId: bigint;
 };
 
 export interface IPrimeCDOInterface extends Interface {
@@ -70,7 +76,7 @@ export interface IPrimeCDOInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "claimSharesWithdraw",
-    values: [BigNumberish, AddressLike]
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "claimWithdraw",
@@ -94,12 +100,12 @@ export interface IPrimeCDOInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "requestWithdraw",
-    values: [BigNumberish, BigNumberish, AddressLike, AddressLike, BigNumberish]
+    values: [BigNumberish, BigNumberish, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "strategy", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "withdrawJunior",
-    values: [BigNumberish, AddressLike, AddressLike, BigNumberish, BigNumberish]
+    values: [BigNumberish, AddressLike, BigNumberish, BigNumberish]
   ): string;
 
   decodeFunctionResult(functionFragment: "accounting", data: BytesLike): Result;
@@ -181,7 +187,7 @@ export interface IPrimeCDO extends BaseContract {
   accounting: TypedContractMethod<[], [string], "view">;
 
   claimSharesWithdraw: TypedContractMethod<
-    [cooldownId: BigNumberish, outputToken: AddressLike],
+    [cooldownId: BigNumberish],
     [bigint],
     "nonpayable"
   >;
@@ -221,7 +227,6 @@ export interface IPrimeCDO extends BaseContract {
     [
       tranche: BigNumberish,
       baseAmount: BigNumberish,
-      outputToken: AddressLike,
       beneficiary: AddressLike,
       vaultShares: BigNumberish
     ],
@@ -234,7 +239,6 @@ export interface IPrimeCDO extends BaseContract {
   withdrawJunior: TypedContractMethod<
     [
       baseAmount: BigNumberish,
-      outputToken: AddressLike,
       beneficiary: AddressLike,
       vaultShares: BigNumberish,
       totalJuniorShares: BigNumberish
@@ -252,11 +256,7 @@ export interface IPrimeCDO extends BaseContract {
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "claimSharesWithdraw"
-  ): TypedContractMethod<
-    [cooldownId: BigNumberish, outputToken: AddressLike],
-    [bigint],
-    "nonpayable"
-  >;
+  ): TypedContractMethod<[cooldownId: BigNumberish], [bigint], "nonpayable">;
   getFunction(
     nameOrSignature: "claimWithdraw"
   ): TypedContractMethod<
@@ -295,7 +295,6 @@ export interface IPrimeCDO extends BaseContract {
     [
       tranche: BigNumberish,
       baseAmount: BigNumberish,
-      outputToken: AddressLike,
       beneficiary: AddressLike,
       vaultShares: BigNumberish
     ],
@@ -310,7 +309,6 @@ export interface IPrimeCDO extends BaseContract {
   ): TypedContractMethod<
     [
       baseAmount: BigNumberish,
-      outputToken: AddressLike,
       beneficiary: AddressLike,
       vaultShares: BigNumberish,
       totalJuniorShares: BigNumberish
