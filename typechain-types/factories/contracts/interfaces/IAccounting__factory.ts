@@ -11,6 +11,19 @@ import type {
 const _abi = [
   {
     inputs: [],
+    name: "claimReserve",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
     name: "getAllTVLs",
     outputs: [
       {

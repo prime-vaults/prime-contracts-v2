@@ -65,6 +65,13 @@ interface IAccounting {
      */
     function setJuniorWethTVL(uint256 wethValueUSD) external;
 
+    /**
+     * @notice Claim accumulated reserve (fees + gain cuts). Resets s_reserveTVL to 0.
+     * @dev Only callable by the paired PrimeCDO.
+     * @return amount Reserve amount claimed (base-equivalent, 18 decimals)
+     */
+    function claimReserve() external returns (uint256 amount);
+
     // ═══════════════════════════════════════════════════════════════════
     //  VIEW
     // ═══════════════════════════════════════════════════════════════════

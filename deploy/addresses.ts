@@ -69,3 +69,17 @@ export function saveDeployed(addresses: Partial<DeployedAddresses>) {
   const merged = { ...existing, ...addresses };
   fs.writeFileSync(file, JSON.stringify(merged, null, 2));
 }
+
+/**
+ * ⏺ # Step 1 — Shared infrastructure                                                     
+  npx hardhat run deploy/01_deploy_shared.ts --network arbitrum                        
+                                                                                       
+  # Step 2 — Market contracts (Strategy, CDO, Vaults)                                  
+  npx hardhat run deploy/02_deploy_market.ts --network arbitrum                        
+                                                                                       
+  # Step 3 — Wire everything together                                                  
+  KEEPER_ADDRESS=0x... npx hardhat run deploy/03_configure.ts --network arbitrum       
+                                                                                       
+  # Step 4 — PrimeLens (read-only aggregator)                                          
+  npx hardhat run deploy/04_deploy_lens.ts --network arbitrum   
+ */

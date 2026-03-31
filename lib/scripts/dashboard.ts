@@ -97,7 +97,13 @@ async function main() {
   //  User Portfolio
   // ─────────────────────────────────────────────────────────────────
 
-  const userAddr = parseFlag(args, "--user");
+  // Resolve user: --user flag, or PRIVATE_KEY env
+  let userAddr = parseFlag(args, "--user");
+  if (!userAddr && process.env.PRIVATE_KEY) {
+    const { privateKeyToAccount } = await import("viem/accounts");
+    userAddr = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`).address;
+  }
+
   if (userAddr) {
     const portfolio = await sdk.getUserPortfolio(userAddr);
     console.log(`\n  Portfolio — ${userAddr}`);
@@ -109,13 +115,21 @@ async function main() {
 
     // Pending withdraws
     const pending = await sdk.getUserPendingWithdraws(userAddr);
-    if (pending.length > 0) {
-      console.log(`\n  Pending Withdraws`);
-      for (const pw of pending) {
-        console.log(`    #${pw.requestId} | ${formatUnits(pw.amount, 18)} | claimable=${pw.isClaimable} | remaining=${Number(pw.timeRemaining)}s`);
-      }
+    console.log(`\n  Pending Withdraws: ${pending.length}`);
+    for (const pw of pending) {
+      const remaining = Number(pw.timeRemaining);
+      const remainStr = remaining > 0 ? `${(remaining / 3600).toFixed(1)}h remaining` : "ready";
+      console.log(`    #${pw.requestId} | ${formatUnits(pw.amount, 18)} | handler=${pw.handler.slice(0, 10)}... | claimable=${pw.isClaimable} | ${remainStr}`);
     }
 
+    // Claimable withdraws
+    const claimable = await sdk.getClaimableWithdraws(userAddr);
+    if (claimable.length > 0) {
+      console.log(`\n  Claimable Withdraws: ${claimable.length}`);
+      for (const cw of claimable) {
+        console.log(`    #${cw.requestId} | ${formatUnits(cw.amount, 18)} | handler=${cw.handler.slice(0, 10)}...`);
+      }
+    }
   }
 
   console.log();

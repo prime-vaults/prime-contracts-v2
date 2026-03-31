@@ -707,6 +707,18 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         emit ShortfallUnpaused();
     }
 
+    /**
+     * @notice Claim accumulated reserve (fees + gain cuts) to owner.
+     * @dev Withdraws reserve amount from strategy as sUSDai → transfers to owner.
+     * @return amountOut sUSDai amount sent to owner
+     */
+    function claimReserve() external onlyOwner returns (uint256 amountOut) {
+        uint256 reserveAmount = i_accounting.claimReserve();
+        if (reserveAmount == 0) return 0;
+        WithdrawResult memory wr = i_strategy.withdraw(reserveAmount, i_outputToken, owner());
+        amountOut = wr.amountOut;
+    }
+
     function setRatioTarget(uint256 target) external onlyOwner {
         s_ratioTarget = target;
     }

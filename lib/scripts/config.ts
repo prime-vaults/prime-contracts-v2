@@ -70,18 +70,27 @@ export function hasFlag(args: string[], flag: string): boolean {
   npx tsx lib/scripts/dashboard.ts --rebalance                                         
                                                                                        
   # Deposit Senior/Mezz                                                                
-  npx tsx lib/scripts/deposit-flow.ts --tranche SENIOR --amount 100                    
-  npx tsx lib/scripts/deposit-flow.ts --tranche MEZZ --amount 50 --dry-run             
+  npx tsx lib/scripts/deposit-flow.ts --tranche SENIOR --amount 0.1                    
+  npx tsx lib/scripts/deposit-flow.ts --tranche MEZZ --amount 0.1 --dry-run             
                                                                                        
   # Deposit Junior (auto tính WETH)                                                    
-  npx tsx lib/scripts/deposit-junior-flow.ts --amount 100                              
+  npx tsx lib/scripts/deposit-junior-flow.ts --amount 0.1                              
                                                                                        
   # Withdraw                                                                           
   npx tsx lib/scripts/withdraw-flow.ts --tranche JUNIOR --shares 100                   
-  npx tsx lib/scripts/withdraw-flow.ts --tranche SENIOR --shares 50 --dry-run          
+  npx tsx lib/scripts/withdraw-flow.ts --tranche SENIOR --shares 0.05 --dry-run          
                                                                                        
   # Claim (sau cooldown)                                                               
   npx tsx lib/scripts/withdraw-flow.ts --claim --cooldown-id 1 --tranche SENIOR        
   npx tsx lib/scripts/withdraw-flow.ts --claim-shares --cooldown-id 1 --tranche MEZZ   
+           
+  ⏺ # ERC20Cooldown (ASSETS_LOCK) — default 3 days
+  npx tsx lib/scripts/set-cooldown.ts --handler erc20 --duration 3d                    
                                                                                        
+  # SharesCooldown (SHARES_LOCK) — default 7 days                                      
+  npx tsx lib/scripts/set-cooldown.ts --handler shares --duration 7d                   
+                                                                                       
+  # Set to 0 for testing (instant claim)                                               
+  npx tsx lib/scripts/set-cooldown.ts --handler erc20 --duration 0s                    
+  npx tsx lib/scripts/set-cooldown.ts --handler shares --duration 0s  
  */

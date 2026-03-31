@@ -179,6 +179,12 @@ contract Accounting is IAccounting {
         emit JuniorWethTVLSet(wethValueUSD);
     }
 
+    /** @notice Claim accumulated reserve. Resets s_reserveTVL to 0. */
+    function claimReserve() external override onlyCDO returns (uint256 amount) {
+        amount = s_reserveTVL;
+        s_reserveTVL = 0;
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     //  VIEW
     // ═══════════════════════════════════════════════════════════════════

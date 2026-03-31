@@ -618,6 +618,7 @@ export class PrimeVaultsSDK {
   }
 
   formatRatio(ratio: bigint): string {
+    if (ratio >= 2n ** 255n) return "∞";
     return `${(Number(ratio) / 1e16).toFixed(2)}%`;
   }
 }

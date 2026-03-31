@@ -26,7 +26,8 @@
       "WebFetch(domain:arbiscan.io)",
       "Bash(cast sig:*)",
       "Bash(cast storage:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(python3 -c \"from web3 import Web3; print\\(Web3.keccak\\(text=''PrimeVaults__ShortfallPaused\\(\\)''\\).hex\\(\\)[:10]\\)\")"
     ]
   }
 }

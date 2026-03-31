@@ -23,6 +23,7 @@ import type {
 export interface IAccountingInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "claimReserve"
       | "getAllTVLs"
       | "getJuniorBaseTVL"
       | "getJuniorTVL"
@@ -36,6 +37,10 @@ export interface IAccountingInterface extends Interface {
       | "updateTVL"
   ): FunctionFragment;
 
+  encodeFunctionData(
+    functionFragment: "claimReserve",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "getAllTVLs",
     values?: undefined
@@ -81,6 +86,10 @@ export interface IAccountingInterface extends Interface {
     values: [BigNumberish, BigNumberish]
   ): string;
 
+  decodeFunctionResult(
+    functionFragment: "claimReserve",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "getAllTVLs", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getJuniorBaseTVL",
@@ -161,6 +170,8 @@ export interface IAccounting extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  claimReserve: TypedContractMethod<[], [bigint], "nonpayable">;
+
   getAllTVLs: TypedContractMethod<
     [],
     [[bigint, bigint, bigint] & { sr: bigint; mz: bigint; jr: bigint }],
@@ -211,6 +222,9 @@ export interface IAccounting extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "claimReserve"
+  ): TypedContractMethod<[], [bigint], "nonpayable">;
   getFunction(
     nameOrSignature: "getAllTVLs"
   ): TypedContractMethod<

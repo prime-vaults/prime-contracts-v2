@@ -27,6 +27,7 @@ export interface AccountingInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "PRECISION"
+      | "claimReserve"
       | "getAllTVLs"
       | "getJuniorBaseTVL"
       | "getJuniorTVL"
@@ -65,6 +66,10 @@ export interface AccountingInterface extends Interface {
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "PRECISION", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "claimReserve",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "getAllTVLs",
     values?: undefined
@@ -154,6 +159,10 @@ export interface AccountingInterface extends Interface {
   ): string;
 
   decodeFunctionResult(functionFragment: "PRECISION", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "claimReserve",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "getAllTVLs", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getJuniorBaseTVL",
@@ -389,6 +398,8 @@ export interface Accounting extends BaseContract {
 
   PRECISION: TypedContractMethod<[], [bigint], "view">;
 
+  claimReserve: TypedContractMethod<[], [bigint], "nonpayable">;
+
   getAllTVLs: TypedContractMethod<
     [],
     [[bigint, bigint, bigint] & { sr: bigint; mz: bigint; jr: bigint }],
@@ -468,6 +479,9 @@ export interface Accounting extends BaseContract {
   getFunction(
     nameOrSignature: "PRECISION"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "claimReserve"
+  ): TypedContractMethod<[], [bigint], "nonpayable">;
   getFunction(
     nameOrSignature: "getAllTVLs"
   ): TypedContractMethod<

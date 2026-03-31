@@ -63,6 +63,7 @@ export interface PrimeCDOInterface extends Interface {
       | "PRECISION"
       | "acceptOwnership"
       | "accounting"
+      | "claimReserve"
       | "claimSharesWithdraw"
       | "claimWithdraw"
       | "deposit"
@@ -123,6 +124,10 @@ export interface PrimeCDOInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "accounting",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "claimReserve",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -279,6 +284,10 @@ export interface PrimeCDOInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "accounting", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "claimReserve",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "claimSharesWithdraw",
     data: BytesLike
@@ -599,6 +608,8 @@ export interface PrimeCDO extends BaseContract {
 
   accounting: TypedContractMethod<[], [string], "view">;
 
+  claimReserve: TypedContractMethod<[], [bigint], "nonpayable">;
+
   claimSharesWithdraw: TypedContractMethod<
     [cooldownId: BigNumberish],
     [bigint],
@@ -765,6 +776,9 @@ export interface PrimeCDO extends BaseContract {
   getFunction(
     nameOrSignature: "accounting"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "claimReserve"
+  ): TypedContractMethod<[], [bigint], "nonpayable">;
   getFunction(
     nameOrSignature: "claimSharesWithdraw"
   ): TypedContractMethod<[cooldownId: BigNumberish], [bigint], "nonpayable">;
