@@ -440,6 +440,23 @@ export const TRANCHE_VAULT_ABI = [
   },
 ] as const;
 
+export const ACCOUNTING_ABI = [
+  {
+    inputs: [],
+    name: "getSeniorAPR",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getMezzAPR",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
 export const ERC20_ABI = [
   {
     inputs: [

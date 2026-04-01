@@ -31,6 +31,7 @@ export interface TrancheInfo {
   totalAssets: bigint;
   totalSupply: bigint;
   sharePrice: bigint;
+  apr: bigint;
 }
 
 export interface JuniorPosition {

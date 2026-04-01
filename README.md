@@ -1,8 +1,8 @@
-# PrimeVaults V3
+# PrimeVaults V2
 
 ## What is PrimeVaults?
 
-PrimeVaults V3 is a **3-tranche structured yield protocol** on Arbitrum. It takes a single yield source (e.g. sUSDai from USD.AI) and splits its risk/reward into three tiers -- Senior, Mezzanine, and Junior -- so that depositors can choose the exact risk profile they want.
+PrimeVaults V2 is a **3-tranche structured yield protocol** on Arbitrum. It takes a single yield source (e.g. sUSDai from USD.AI) and splits its risk/reward into three tiers -- Senior, Mezzanine, and Junior -- so that depositors can choose the exact risk profile they want.
 
 ### The Problem
 
@@ -12,11 +12,11 @@ DeFi yield is binary: you either take all the risk of a yield source, or you don
 
 PrimeVaults solves this by structuring yield into tranches (inspired by traditional finance CDOs):
 
-| Tranche | Risk | Yield | Loss Absorption | Who Is It For? |
-|---------|------|-------|-----------------|----------------|
-| **Senior** | Lowest | Guaranteed floor APR (benchmark rate) | Last to lose (4th layer) | Conservative capital, treasuries, institutions |
-| **Mezzanine** | Medium | Leveraged residual yield (~2-3x base APR) | 3rd layer | Yield seekers wanting moderate risk |
-| **Junior** | Highest | 3 yield streams + risk premiums | First to lose (1st + 2nd layer) | Risk-tolerant capital, protocol-aligned depositors |
+| Tranche       | Risk    | Yield                                     | Loss Absorption                 | Who Is It For?                                     |
+| ------------- | ------- | ----------------------------------------- | ------------------------------- | -------------------------------------------------- |
+| **Senior**    | Lowest  | Guaranteed floor APR (benchmark rate)     | Last to lose (4th layer)        | Conservative capital, treasuries, institutions     |
+| **Mezzanine** | Medium  | Leveraged residual yield (~2-3x base APR) | 3rd layer                       | Yield seekers wanting moderate risk                |
+| **Junior**    | Highest | 3 yield streams + risk premiums           | First to lose (1st + 2nd layer) | Risk-tolerant capital, protocol-aligned depositors |
 
 **Key insight:** Junior depositors provide a WETH buffer (20% of their deposit) that acts as first-loss insurance. In exchange, they earn risk premiums paid by Senior and Mezzanine, plus Aave yield on the WETH buffer, plus base strategy yield.
 
@@ -59,9 +59,11 @@ Market "USD.AI" (sUSDai):
 ### Core Contracts -- What Each One Does
 
 #### PrimeCDO -- The Orchestrator
+
 **Problem it solves:** Someone needs to coordinate deposits across 3 tranches, enforce coverage gates, manage the WETH buffer, trigger loss coverage, and handle rebalancing -- all atomically and securely.
 
 PrimeCDO is the central coordinator for a single market. It:
+
 - Routes deposits to the strategy (Senior/Mezz) or strategy + Aave (Junior dual-asset)
 - Enforces **coverage gates**: blocks Senior/Mezz deposits if coverage drops below 105% (insufficient Junior subordination)
 - Manages the **WETH ratio** (fixed 80/20 base/WETH for Junior), with asymmetric rebalancing -- permissionless sell when ETH rises, governance-only buy when ETH drops
@@ -70,63 +72,76 @@ PrimeCDO is the central coordinator for a single market. It:
 - Routes withdrawals through the RedemptionPolicy for coverage-aware cooldowns
 
 #### Accounting -- The Math Engine
+
 **Problem it solves:** With 3 tranches sharing one yield source, how do you fairly split gains while ensuring losses hit the right people first?
 
 Accounting tracks per-tranche TVL (including dual-asset Junior: base + WETH) and implements:
+
 - **Gain splitting:** Senior gets a guaranteed target APR (from APR oracle). Junior base gets the residual. Mezzanine gets leveraged yield from the spread.
 - **Loss waterfall (4 layers):** WETH buffer (Layer 0) -> Junior base (Layer 1) -> Mezzanine (Layer 2) -> Senior (Layer 3). Senior only loses if everything else is wiped out.
 - **Risk premium curves (RP1, RP2):** Mathematical functions that auto-price the cost of protection. As more Senior capital enters, RP1 rises (Senior pays more to Mezz). As coverage drops, RP2 rises (pool pays more to Junior).
 
 #### TrancheVault -- The User-Facing Token
+
 **Problem it solves:** Users need a standard ERC-4626 vault token that represents their position in a specific tranche, while all the complex logic lives in PrimeCDO.
 
 TrancheVault is deployed 3 times per market (pvSENIOR, pvMEZZ, pvJUNIOR) with identical bytecode. It:
+
 - Wraps ERC-4626 (deposit/mint/convertToAssets) but delegates all logic to PrimeCDO
 - Disables standard `withdraw`/`redeem` -- users must call `requestWithdraw` to enter the cooldown flow
 - Junior mode: `depositJunior` accepts both base asset + WETH in 80/20 ratio
 
 #### RedemptionPolicy -- Coverage-Aware Cooldowns
+
 **Problem it solves:** During stress (low coverage), allowing instant withdrawals from riskier tranches would drain the protocol. But hard-blocking withdrawals is bad UX. How to balance?
 
 RedemptionPolicy uses a **mechanism escalation** approach based on real-time coverage ratios:
+
 - **Senior:** Always instant (best UX for safest tranche)
 - **Mezzanine:** Instant (cs > 160%) -> AssetsLock cooldown (cs > 140%) -> SharesLock (cs <= 140%)
 - **Junior:** Requires BOTH cs AND cm above thresholds. Most restrictive when coverage is stressed.
 
 Three cooldown mechanisms:
+
 - **NONE:** Instant withdrawal
 - **ASSETS_LOCK (ERC20Cooldown):** Assets locked for a period, no yield during lock
 - **SHARES_LOCK (SharesCooldown):** Shares locked but continue earning yield (important: shares may appreciate during lock)
 
 #### AaveWETHAdapter -- The WETH Buffer
+
 **Problem it solves:** Junior deposits 20% in WETH as first-loss insurance, but idle WETH earns nothing. How to make it productive while keeping it available for loss coverage?
 
 AaveWETHAdapter deposits the WETH into Aave v3 to earn supply yield (~2-3% APR). When losses occur, it withdraws from Aave, swaps WETH to base asset via SwapFacility, and injects the proceeds back into the strategy -- all atomically in one transaction.
 
 #### SwapFacility -- WETH <-> Base Asset Swaps
+
 **Problem it solves:** The protocol needs to swap WETH to base asset (for loss coverage and rebalancing) and base asset to WETH (for rebalancing). These swaps need slippage protection and oracle-based pricing.
 
 SwapFacility wraps Uniswap V3 swaps with Chainlink oracle price checks for MEV protection.
 
 #### WETHPriceOracle -- ETH Price Feed
+
 **Problem it solves:** The protocol needs a manipulation-resistant ETH/USD price for WETH ratio calculations and swap pricing.
 
 Uses Chainlink with a 30-minute TWAP to resist short-term price manipulation.
 
 #### BaseStrategy / SUSDaiStrategy -- Yield Source Adapter
+
 **Problem it solves:** Different yield sources (sUSDe, sUSDai) have different interfaces, cooldown mechanisms, and token flows. The CDO needs a uniform interface.
 
 BaseStrategy provides a standard interface (`deposit`, `withdraw`, `totalAssets`) that concrete implementations adapt to specific yield sources. SUSDaiStrategy connects to the sUSDai ERC-7540 vault on Arbitrum.
 
 #### AprPairFeed / SUSDaiAprPairProvider -- APR Oracle
+
 **Problem it solves:** The gain splitting algorithm needs to know the Senior target APR and the base strategy APR. These rates change over time and must come from a reliable source.
 
 AprPairFeed provides two rates: the benchmark APR (from Aave weighted average) as Senior's floor, and the strategy's current APR for gain calculations.
 
 #### RiskParams -- Premium Curve Configuration
+
 **Problem it solves:** The risk premium curves (RP1, RP2) that price the cost of loss protection need tunable parameters, with safety bounds to prevent misconfiguration.
 
-Stores curve parameters (x, y, k for each curve) with governance-enforced constraints (e.g., RP1 + alpha * RP2 < 100%).
+Stores curve parameters (x, y, k for each curve) with governance-enforced constraints (e.g., RP1 + alpha \* RP2 < 100%).
 
 ### Self-Balancing Economics
 
@@ -246,6 +261,7 @@ ARB_RPC_URL=<url> PRIVATE_KEY=<key> npx tsx lib/scripts/withdraw-flow.ts --tranc
 ## Deployment
 
 Deployed to **Arbitrum mainnet** (chain ID 42161). Key external contracts:
+
 - **USD.AI** (base asset): `0x0A1a1A107E45b7Ced86833863f482BC5f4ed82EF`
 - **sUSDai** (ERC-7540 vault): `0x0B2b2B2076d95dda7817e785989fE353fe955ef9`
 
@@ -273,13 +289,13 @@ Deployed addresses: `deploy/deployed.json`
 
 ## Documentation
 
-| File | Description |
-|------|-------------|
-| `docs/PV_V3_FINAL_v34.md` | Full 36-section technical specification |
-| `docs/PV_V3_MATH_REFERENCE.md` | Formula reference for all mathematical models |
-| `docs/PV_V3_COVERAGE_GATE.md` | Coverage gate blocking and cooldown escalation logic |
-| `docs/PV_V3_MVP_PLAN.md` | 32-step implementation roadmap |
-| `docs/CONVENTIONS.md` | Coding standards and naming conventions |
+| File                           | Description                                          |
+| ------------------------------ | ---------------------------------------------------- |
+| `docs/PV_V3_FINAL_v34.md`      | Full 36-section technical specification              |
+| `docs/PV_V3_MATH_REFERENCE.md` | Formula reference for all mathematical models        |
+| `docs/PV_V3_COVERAGE_GATE.md`  | Coverage gate blocking and cooldown escalation logic |
+| `docs/PV_V3_MVP_PLAN.md`       | 32-step implementation roadmap                       |
+| `docs/CONVENTIONS.md`          | Coding standards and naming conventions              |
 
 ## License
 

@@ -8,7 +8,7 @@ import {
   formatUnits,
   parseUnits,
 } from "viem";
-import { PRIME_LENS_ABI, TRANCHE_VAULT_ABI, ERC20_ABI } from "./abis";
+import { PRIME_LENS_ABI, TRANCHE_VAULT_ABI, ERC20_ABI, ACCOUNTING_ABI } from "./abis";
 import { CooldownType } from "./types";
 import type {
   PrimeVaultsConfig,
@@ -60,13 +60,32 @@ export class PrimeVaultsSDK {
   // ═══════════════════════════════════════════════════════════════════
 
   async getAllTranches(): Promise<{ senior: TrancheInfo; mezz: TrancheInfo; junior: TrancheInfo }> {
-    const result = await this.publicClient.readContract({
-      address: this.addresses.primeLens as Address,
-      abi: PRIME_LENS_ABI,
-      functionName: "getAllTranches",
-    });
-    const [senior, mezz, junior] = result as unknown as any[];
-    const map = (raw: any, id: TrancheId): TrancheInfo => ({
+    const accountingAddr = this.addresses.accounting as Address;
+    const [trancheResult, seniorAPR, mezzAPR, juniorPos] = await Promise.all([
+      this.publicClient.readContract({
+        address: this.addresses.primeLens as Address,
+        abi: PRIME_LENS_ABI,
+        functionName: "getAllTranches",
+      }),
+      this.publicClient.readContract({
+        address: accountingAddr,
+        abi: ACCOUNTING_ABI,
+        functionName: "getSeniorAPR",
+      }),
+      this.publicClient.readContract({
+        address: accountingAddr,
+        abi: ACCOUNTING_ABI,
+        functionName: "getMezzAPR",
+      }),
+      this.publicClient.readContract({
+        address: this.addresses.primeLens as Address,
+        abi: PRIME_LENS_ABI,
+        functionName: "getJuniorPosition",
+      }),
+    ]);
+    const [senior, mezz, junior] = trancheResult as unknown as any[];
+    const juniorRaw = juniorPos as any;
+    const map = (raw: any, id: TrancheId, apr: bigint): TrancheInfo => ({
       trancheId: id,
       vault: raw.vault,
       name: raw.name,
@@ -74,17 +93,36 @@ export class PrimeVaultsSDK {
       totalAssets: raw.totalAssets,
       totalSupply: raw.totalSupply,
       sharePrice: raw.sharePrice,
+      apr,
     });
-    return { senior: map(senior, "SENIOR"), mezz: map(mezz, "MEZZ"), junior: map(junior, "JUNIOR") };
+    return {
+      senior: map(senior, "SENIOR", seniorAPR as bigint),
+      mezz: map(mezz, "MEZZ", mezzAPR as bigint),
+      junior: map(junior, "JUNIOR", juniorRaw.aaveAPR as bigint),
+    };
   }
 
   async getTrancheInfo(tranche: TrancheId): Promise<TrancheInfo> {
-    const result = await this.publicClient.readContract({
-      address: this.addresses.primeLens as Address,
-      abi: PRIME_LENS_ABI,
-      functionName: "getTrancheInfo",
-      args: [TRANCHE_MAP[tranche]],
-    });
+    const accountingAddr = this.addresses.accounting as Address;
+    const [result, apr] = await Promise.all([
+      this.publicClient.readContract({
+        address: this.addresses.primeLens as Address,
+        abi: PRIME_LENS_ABI,
+        functionName: "getTrancheInfo",
+        args: [TRANCHE_MAP[tranche]],
+      }),
+      tranche === "SENIOR"
+        ? this.publicClient.readContract({ address: accountingAddr, abi: ACCOUNTING_ABI, functionName: "getSeniorAPR" })
+        : tranche === "MEZZ"
+          ? this.publicClient.readContract({ address: accountingAddr, abi: ACCOUNTING_ABI, functionName: "getMezzAPR" })
+          : this.publicClient
+              .readContract({
+                address: this.addresses.primeLens as Address,
+                abi: PRIME_LENS_ABI,
+                functionName: "getJuniorPosition",
+              })
+              .then((pos: any) => pos.aaveAPR),
+    ]);
     const raw = result as any;
     return {
       trancheId: tranche,
@@ -94,6 +132,7 @@ export class PrimeVaultsSDK {
       totalAssets: raw.totalAssets,
       totalSupply: raw.totalSupply,
       sharePrice: raw.sharePrice,
+      apr: apr as bigint,
     };
   }
 
