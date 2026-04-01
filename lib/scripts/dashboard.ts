@@ -46,7 +46,7 @@ async function main() {
   console.log(`\n  Tranches`);
   console.log(`  ───────────────────────────────────`);
   for (const [label, t] of [["Senior", tranches.senior], ["Mezz", tranches.mezz], ["Junior", tranches.junior]] as const) {
-    console.log(`  ${label}: ${t.symbol} | assets=${formatUnits(t.totalAssets, 18)} | supply=${formatUnits(t.totalSupply, 18)} | price=${sdk.formatSharePrice(t.sharePrice)}`);
+    console.log(`  ${label}: ${t.symbol} | assets=${formatUnits(t.totalAssets, 18)} | supply=${formatUnits(t.totalSupply, 18)} | price=${sdk.formatSharePrice(t.sharePrice)} | APR=${sdk.formatRatio(t.apr)}`);
   }
 
   // ─────────────────────────────────────────────────────────────────

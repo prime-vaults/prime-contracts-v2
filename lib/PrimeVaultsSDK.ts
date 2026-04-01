@@ -61,7 +61,7 @@ export class PrimeVaultsSDK {
 
   async getAllTranches(): Promise<{ senior: TrancheInfo; mezz: TrancheInfo; junior: TrancheInfo }> {
     const accountingAddr = this.addresses.accounting as Address;
-    const [trancheResult, seniorAPR, mezzAPR, juniorPos] = await Promise.all([
+    const [trancheResult, seniorAPR, mezzAPR, juniorAPR] = await Promise.all([
       this.publicClient.readContract({
         address: this.addresses.primeLens as Address,
         abi: PRIME_LENS_ABI,
@@ -77,14 +77,9 @@ export class PrimeVaultsSDK {
         abi: ACCOUNTING_ABI,
         functionName: "getMezzAPR",
       }),
-      this.publicClient.readContract({
-        address: this.addresses.primeLens as Address,
-        abi: PRIME_LENS_ABI,
-        functionName: "getJuniorPosition",
-      }),
+      this.getJuniorAPR(),
     ]);
     const [senior, mezz, junior] = trancheResult as unknown as any[];
-    const juniorRaw = juniorPos as any;
     const map = (raw: any, id: TrancheId, apr: bigint): TrancheInfo => ({
       trancheId: id,
       vault: raw.vault,
@@ -98,7 +93,7 @@ export class PrimeVaultsSDK {
     return {
       senior: map(senior, "SENIOR", seniorAPR as bigint),
       mezz: map(mezz, "MEZZ", mezzAPR as bigint),
-      junior: map(junior, "JUNIOR", juniorRaw.aaveAPR as bigint),
+      junior: map(junior, "JUNIOR", juniorAPR),
     };
   }
 
@@ -115,13 +110,7 @@ export class PrimeVaultsSDK {
         ? this.publicClient.readContract({ address: accountingAddr, abi: ACCOUNTING_ABI, functionName: "getSeniorAPR" })
         : tranche === "MEZZ"
           ? this.publicClient.readContract({ address: accountingAddr, abi: ACCOUNTING_ABI, functionName: "getMezzAPR" })
-          : this.publicClient
-              .readContract({
-                address: this.addresses.primeLens as Address,
-                abi: PRIME_LENS_ABI,
-                functionName: "getJuniorPosition",
-              })
-              .then((pos: any) => pos.aaveAPR),
+          : this.getJuniorAPR(),
     ]);
     const raw = result as any;
     return {
@@ -152,6 +141,29 @@ export class PrimeVaultsSDK {
       currentRatio: raw.currentRatio,
       aaveAPR: raw.aaveAPR,
     };
+  }
+
+  /**
+   * Compute total Junior APR = on-chain strategy residual + Aave WETH yield weighted by ratio.
+   *
+   * Accounting.getJuniorAPR() returns the strategy residual (after Senior & Mezz claims).
+   * Aave WETH yield is added here, weighted by the current WETH ratio in the Junior tranche.
+   *
+   * @returns Junior APR in 18-decimal precision (1e18 = 100%)
+   */
+  async getJuniorAPR(): Promise<bigint> {
+    const PRECISION = 1_000_000_000_000_000_000n;
+    const accountingAddr = this.addresses.accounting as Address;
+
+    const [strategyResidualAPR, juniorPos] = await Promise.all([
+      this.publicClient.readContract({ address: accountingAddr, abi: ACCOUNTING_ABI, functionName: "getJuniorAPR" }),
+      this.getJuniorPosition(),
+    ]);
+
+    // Aave WETH yield weighted by WETH ratio
+    const wethAPR = (juniorPos.aaveAPR * juniorPos.currentRatio) / PRECISION;
+
+    return (strategyResidualAPR as bigint) + wethAPR;
   }
 
   async getProtocolHealth(): Promise<ProtocolHealth> {

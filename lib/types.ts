@@ -21,6 +21,7 @@ export interface ContractAddresses {
   sharesCooldown?: string;
   redemptionPolicy?: string;
   aprFeed?: string;
+  riskParams?: string;
 }
 
 export interface TrancheInfo {

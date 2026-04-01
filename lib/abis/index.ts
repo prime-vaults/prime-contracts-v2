@@ -440,6 +440,27 @@ export const TRANCHE_VAULT_ABI = [
   },
 ] as const;
 
+export const APR_PAIR_FEED_ABI = [
+  {
+    inputs: [],
+    name: "latestRoundData",
+    outputs: [
+      {
+        components: [
+          { name: "aprTarget", type: "int64" },
+          { name: "aprBase", type: "int64" },
+          { name: "updatedAt", type: "uint64" },
+          { name: "answeredInRound", type: "uint32" },
+        ],
+        name: "",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
 export const ACCOUNTING_ABI = [
   {
     inputs: [],
@@ -451,6 +472,13 @@ export const ACCOUNTING_ABI = [
   {
     inputs: [],
     name: "getMezzAPR",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getJuniorAPR",
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
