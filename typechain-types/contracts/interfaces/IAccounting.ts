@@ -23,6 +23,7 @@ import type {
 export interface IAccountingInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "applySlippageLoss"
       | "claimReserve"
       | "getAllTVLs"
       | "getJuniorAPR"
@@ -38,6 +39,10 @@ export interface IAccountingInterface extends Interface {
       | "updateTVL"
   ): FunctionFragment;
 
+  encodeFunctionData(
+    functionFragment: "applySlippageLoss",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "claimReserve",
     values?: undefined
@@ -91,6 +96,10 @@ export interface IAccountingInterface extends Interface {
     values: [BigNumberish, BigNumberish]
   ): string;
 
+  decodeFunctionResult(
+    functionFragment: "applySlippageLoss",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "claimReserve",
     data: BytesLike
@@ -179,6 +188,12 @@ export interface IAccounting extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  applySlippageLoss: TypedContractMethod<
+    [slippageLoss: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   claimReserve: TypedContractMethod<[], [bigint], "nonpayable">;
 
   getAllTVLs: TypedContractMethod<
@@ -225,7 +240,7 @@ export interface IAccounting extends BaseContract {
 
   updateTVL: TypedContractMethod<
     [currentStrategyTVL: BigNumberish, currentWethValueUSD: BigNumberish],
-    [void],
+    [bigint],
     "nonpayable"
   >;
 
@@ -233,6 +248,9 @@ export interface IAccounting extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "applySlippageLoss"
+  ): TypedContractMethod<[slippageLoss: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "claimReserve"
   ): TypedContractMethod<[], [bigint], "nonpayable">;
@@ -289,7 +307,7 @@ export interface IAccounting extends BaseContract {
     nameOrSignature: "updateTVL"
   ): TypedContractMethod<
     [currentStrategyTVL: BigNumberish, currentWethValueUSD: BigNumberish],
-    [void],
+    [bigint],
     "nonpayable"
   >;
 

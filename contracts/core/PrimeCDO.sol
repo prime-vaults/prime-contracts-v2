@@ -438,7 +438,6 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
                 result = _withdrawInstant(TrancheId.JUNIOR, netAmount, beneficiary, feeAmount);
             }
             result.wethAmount = userWeth;
-
         } else if (policy.mechanism == RedemptionPolicy.CooldownMechanism.ASSETS_LOCK) {
             // ASSETS_LOCK: both WETH + sUSDai locked in ERC20Cooldown
             uint256 wethCooldownId = 0;
@@ -453,7 +452,6 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
             }
             result.wethAmount = userWeth;
             result.wethCooldownId = wethCooldownId;
-
         } else {
             // SHARES_LOCK: shares escrowed — WETH stays in Aave (accrues yield)
             result = _withdrawSharesLock(TrancheId.JUNIOR, beneficiary, vaultShares, feeAmount);
@@ -484,9 +482,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
      *      User benefits from yield accrued during cooldown (shares appreciated).
      *      Callable by anyone.
      */
-    function claimSharesWithdraw(
-        uint256 cooldownId
-    ) external override returns (uint256 amountOut) {
+    function claimSharesWithdraw(uint256 cooldownId) external override returns (uint256 amountOut) {
         // 1. Claim shares from SharesCooldown → shares come back to this CDO
         CooldownRequest memory req = i_sharesCooldown.getRequest(cooldownId);
         uint256 sharesReturned = i_sharesCooldown.claim(cooldownId);
@@ -735,10 +731,60 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     //  INTERNAL
     // ═══════════════════════════════════════════════════════════════════
 
+    /**
+     * @dev Sync Accounting with current strategy + WETH state.
+     *      If loss waterfall absorbs WETH (Layer 0), immediately withdraw + swap + restake
+     *      so there is no window for ETH price to drop further.
+     */
     function _updateAccounting() internal {
         uint256 strategyTVL = i_strategy.totalAssets();
         uint256 wethUSD = i_aaveWETHAdapter.totalAssetsUSD();
-        i_accounting.updateTVL(strategyTVL, wethUSD);
+        uint256 wethCoverageUSD = i_accounting.updateTVL(strategyTVL, wethUSD);
+
+        if (wethCoverageUSD > 0) {
+            _executeWETHSwapAndRestake(wethCoverageUSD);
+        }
+    }
+
+    /**
+     * @dev Withdraw WETH from Aave, swap to base asset, deposit into strategy.
+     *      Called atomically within the same tx as loss detection (no price risk window).
+     *      Uses emergency slippage tier. If swap output < coverageUSD (slippage),
+     *      the shortfall is applied immediately to Layer 1-3 (Jr base → Mz → Sr).
+     * @param coverageUSD USD value of WETH to sell (from Accounting Layer 0)
+     */
+    function _executeWETHSwapAndRestake(uint256 coverageUSD) internal {
+        uint256 wethPrice = i_wethOracle.getSpotPrice();
+        uint256 wethNeeded = (coverageUSD * PRECISION) / wethPrice;
+
+        // Cap at available WETH in Aave
+        uint256 wethAvailable = i_aaveWETHAdapter.totalAssets();
+        if (wethNeeded > wethAvailable) wethNeeded = wethAvailable;
+        if (wethNeeded == 0) return;
+
+        // Withdraw WETH from Aave → swap → deposit into strategy
+        i_aaveWETHAdapter.withdraw(wethNeeded, address(this));
+
+        address baseAsset = i_strategy.baseAsset();
+        uint256 minOut = i_swapFacility.getMinOutput(wethNeeded, wethPrice, true);
+        IERC20(i_weth).forceApprove(address(i_swapFacility), wethNeeded);
+        uint256 baseRecovered = i_swapFacility.swapWETHFor(baseAsset, wethNeeded, minOut);
+
+        IERC20(baseAsset).forceApprove(address(i_strategy), baseRecovered);
+        i_strategy.deposit(baseRecovered);
+
+        // Slippage shortfall: swap returned less than oracle value → apply to base waterfall now
+        if (baseRecovered < coverageUSD) {
+            uint256 slippageLoss = coverageUSD - baseRecovered;
+            i_accounting.applySlippageLoss(slippageLoss);
+        }
+
+        // Sync WETH TVL after withdrawal
+        i_accounting.setJuniorWethTVL(i_aaveWETHAdapter.totalAssetsUSD());
+
+        emit WETHCoverageExecuted(coverageUSD, wethNeeded, baseRecovered);
+
+        _checkJuniorShortfall();
     }
 
     /**

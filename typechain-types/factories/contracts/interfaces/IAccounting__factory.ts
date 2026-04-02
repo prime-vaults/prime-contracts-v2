@@ -10,6 +10,19 @@ import type {
 
 const _abi = [
   {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "slippageLoss",
+        type: "uint256",
+      },
+    ],
+    name: "applySlippageLoss",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
     inputs: [],
     name: "claimReserve",
     outputs: [
@@ -210,7 +223,13 @@ const _abi = [
       },
     ],
     name: "updateTVL",
-    outputs: [],
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "wethCoverageUSD",
+        type: "uint256",
+      },
+    ],
     stateMutability: "nonpayable",
     type: "function",
   },

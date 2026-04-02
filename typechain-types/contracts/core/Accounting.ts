@@ -27,6 +27,7 @@ export interface AccountingInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "PRECISION"
+      | "applySlippageLoss"
       | "claimReserve"
       | "getAllTVLs"
       | "getJuniorAPR"
@@ -67,6 +68,10 @@ export interface AccountingInterface extends Interface {
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "PRECISION", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "applySlippageLoss",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "claimReserve",
     values?: undefined
@@ -164,6 +169,10 @@ export interface AccountingInterface extends Interface {
   ): string;
 
   decodeFunctionResult(functionFragment: "PRECISION", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "applySlippageLoss",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "claimReserve",
     data: BytesLike
@@ -327,18 +336,21 @@ export namespace JuniorWethTVLSetEvent {
 export namespace LossAppliedEvent {
   export type InputTuple = [
     loss: BigNumberish,
+    wethAbsorbed: BigNumberish,
     jrAbsorbed: BigNumberish,
     mzAbsorbed: BigNumberish,
     srAbsorbed: BigNumberish
   ];
   export type OutputTuple = [
     loss: bigint,
+    wethAbsorbed: bigint,
     jrAbsorbed: bigint,
     mzAbsorbed: bigint,
     srAbsorbed: bigint
   ];
   export interface OutputObject {
     loss: bigint;
+    wethAbsorbed: bigint;
     jrAbsorbed: bigint;
     mzAbsorbed: bigint;
     srAbsorbed: bigint;
@@ -406,6 +418,12 @@ export interface Accounting extends BaseContract {
   ): Promise<this>;
 
   PRECISION: TypedContractMethod<[], [bigint], "view">;
+
+  applySlippageLoss: TypedContractMethod<
+    [slippageLoss: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   claimReserve: TypedContractMethod<[], [bigint], "nonpayable">;
 
@@ -479,7 +497,7 @@ export interface Accounting extends BaseContract {
 
   updateTVL: TypedContractMethod<
     [currentStrategyTVL: BigNumberish, currentWethValueUSD: BigNumberish],
-    [void],
+    [bigint],
     "nonpayable"
   >;
 
@@ -490,6 +508,9 @@ export interface Accounting extends BaseContract {
   getFunction(
     nameOrSignature: "PRECISION"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "applySlippageLoss"
+  ): TypedContractMethod<[slippageLoss: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "claimReserve"
   ): TypedContractMethod<[], [bigint], "nonpayable">;
@@ -585,7 +606,7 @@ export interface Accounting extends BaseContract {
     nameOrSignature: "updateTVL"
   ): TypedContractMethod<
     [currentStrategyTVL: BigNumberish, currentWethValueUSD: BigNumberish],
-    [void],
+    [bigint],
     "nonpayable"
   >;
 
@@ -695,7 +716,7 @@ export interface Accounting extends BaseContract {
       JuniorWethTVLSetEvent.OutputObject
     >;
 
-    "LossApplied(uint256,uint256,uint256,uint256)": TypedContractEvent<
+    "LossApplied(uint256,uint256,uint256,uint256,uint256)": TypedContractEvent<
       LossAppliedEvent.InputTuple,
       LossAppliedEvent.OutputTuple,
       LossAppliedEvent.OutputObject
