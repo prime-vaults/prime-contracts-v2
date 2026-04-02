@@ -12,6 +12,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ISwapFacility} from "../interfaces/ISwapFacility.sol";
 import {ISwapRouter} from "../interfaces/ISwapRouter.sol";
+import {IQuoterV2} from "../interfaces/IQuoterV2.sol";
 
 /**
  * @title SwapFacility
@@ -37,6 +38,7 @@ contract SwapFacility is Ownable2Step, ISwapFacility {
     // ═══════════════════════════════════════════════════════════════════
 
     ISwapRouter public immutable i_router;
+    IQuoterV2 public immutable i_quoter;
     address public immutable i_weth;
 
     // ═══════════════════════════════════════════════════════════════════
@@ -80,8 +82,9 @@ contract SwapFacility is Ownable2Step, ISwapFacility {
     //  CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════
 
-    constructor(address router_, address weth_, address owner_) Ownable(owner_) {
+    constructor(address router_, address quoter_, address weth_, address owner_) Ownable(owner_) {
         i_router = ISwapRouter(router_);
+        i_quoter = IQuoterV2(quoter_);
         i_weth = weth_;
         s_maxSlippage = 100;       // 1%
         s_emergencySlippage = 1000; // 10%
@@ -171,6 +174,29 @@ contract SwapFacility is Ownable2Step, ISwapFacility {
         uint256 slippage = isEmergency ? s_emergencySlippage : s_maxSlippage;
         uint256 grossOut = wethAmount * wethPrice / PRECISION;
         minOut = grossOut * (MAX_BPS - slippage) / MAX_BPS;
+    }
+
+    /**
+     * @notice Quote how much WETH is needed to receive exactly `baseAmountOut` of a base asset.
+     * @dev Uses Uniswap V3 QuoterV2. Not a pure view — QuoterV2 simulates the swap.
+     * @param outputToken Address of the base asset
+     * @param baseAmountOut Exact amount of base asset desired
+     * @return wethNeeded Amount of WETH required
+     */
+    function quoteWETHForExactOutput(address outputToken, uint256 baseAmountOut)
+        external
+        override
+        returns (uint256 wethNeeded)
+    {
+        (wethNeeded, , , ) = i_quoter.quoteExactOutputSingle(
+            IQuoterV2.QuoteExactOutputSingleParams({
+                tokenIn: i_weth,
+                tokenOut: outputToken,
+                amount: baseAmountOut,
+                fee: _getPoolFee(outputToken),
+                sqrtPriceLimitX96: 0
+            })
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════

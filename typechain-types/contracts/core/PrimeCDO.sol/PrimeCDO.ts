@@ -60,6 +60,7 @@ export type CDOWithdrawResultStructOutput = [
 export interface PrimeCDOInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "MAX_ORACLE_DEVIATION"
       | "PRECISION"
       | "acceptOwnership"
       | "accounting"
@@ -117,6 +118,10 @@ export interface PrimeCDOInterface extends Interface {
       | "WETHCoverageExecuted"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "MAX_ORACLE_DEVIATION",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "PRECISION", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "acceptOwnership",
@@ -278,6 +283,10 @@ export interface PrimeCDOInterface extends Interface {
     values: [BigNumberish, AddressLike, BigNumberish, BigNumberish]
   ): string;
 
+  decodeFunctionResult(
+    functionFragment: "MAX_ORACLE_DEVIATION",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "PRECISION", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "acceptOwnership",
@@ -602,6 +611,8 @@ export interface PrimeCDO extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  MAX_ORACLE_DEVIATION: TypedContractMethod<[], [bigint], "view">;
+
   PRECISION: TypedContractMethod<[], [bigint], "view">;
 
   acceptOwnership: TypedContractMethod<[], [void], "nonpayable">;
@@ -767,6 +778,9 @@ export interface PrimeCDO extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "MAX_ORACLE_DEVIATION"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "PRECISION"
   ): TypedContractMethod<[], [bigint], "view">;

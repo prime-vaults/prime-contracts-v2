@@ -54,4 +54,13 @@ interface ISwapFacility {
      * @return minOut Minimum acceptable output amount
      */
     function getMinOutput(uint256 wethAmount, uint256 wethPrice, bool isEmergency) external view returns (uint256 minOut);
+
+    /**
+     * @notice Quote how much WETH is needed to receive exactly `baseAmountOut` of a base asset.
+     * @dev Uses Uniswap V3 QuoterV2. This is a view-like call (uses staticcall internally).
+     * @param outputToken Address of the base asset
+     * @param baseAmountOut Exact amount of base asset desired
+     * @return wethNeeded Amount of WETH required
+     */
+    function quoteWETHForExactOutput(address outputToken, uint256 baseAmountOut) external returns (uint256 wethNeeded);
 }

@@ -76,6 +76,8 @@ export type { ICooldownHandler } from "./contracts/interfaces/ICooldownHandler";
 export { ICooldownHandler__factory } from "./factories/contracts/interfaces/ICooldownHandler__factory";
 export type { IPrimeCDO } from "./contracts/interfaces/IPrimeCDO";
 export { IPrimeCDO__factory } from "./factories/contracts/interfaces/IPrimeCDO__factory";
+export type { IQuoterV2 } from "./contracts/interfaces/IQuoterV2";
+export { IQuoterV2__factory } from "./factories/contracts/interfaces/IQuoterV2__factory";
 export type { IRatioController } from "./contracts/interfaces/IRatioController";
 export { IRatioController__factory } from "./factories/contracts/interfaces/IRatioController__factory";
 export type { IStrategy } from "./contracts/interfaces/IStrategy";

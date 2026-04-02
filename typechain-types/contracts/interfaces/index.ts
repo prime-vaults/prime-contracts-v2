@@ -8,6 +8,7 @@ export type { IAccounting } from "./IAccounting";
 export type { IAprFeed } from "./IAprFeed";
 export type { ICooldownHandler } from "./ICooldownHandler";
 export type { IPrimeCDO } from "./IPrimeCDO";
+export type { IQuoterV2 } from "./IQuoterV2";
 export type { IRatioController } from "./IRatioController";
 export type { IStrategy } from "./IStrategy";
 export type { ISwapFacility } from "./ISwapFacility";

@@ -30,10 +30,12 @@ export interface SwapFacilityInterface extends Interface {
       | "MAX_BPS"
       | "acceptOwnership"
       | "getMinOutput"
+      | "i_quoter"
       | "i_router"
       | "i_weth"
       | "owner"
       | "pendingOwner"
+      | "quoteWETHForExactOutput"
       | "renounceOwnership"
       | "s_authorizedCDOs"
       | "s_emergencySlippage"
@@ -71,12 +73,17 @@ export interface SwapFacilityInterface extends Interface {
     functionFragment: "getMinOutput",
     values: [BigNumberish, BigNumberish, boolean]
   ): string;
+  encodeFunctionData(functionFragment: "i_quoter", values?: undefined): string;
   encodeFunctionData(functionFragment: "i_router", values?: undefined): string;
   encodeFunctionData(functionFragment: "i_weth", values?: undefined): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "pendingOwner",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "quoteWETHForExactOutput",
+    values: [AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "renounceOwnership",
@@ -136,11 +143,16 @@ export interface SwapFacilityInterface extends Interface {
     functionFragment: "getMinOutput",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "i_quoter", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "i_router", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "i_weth", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "pendingOwner",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "quoteWETHForExactOutput",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -350,6 +362,8 @@ export interface SwapFacility extends BaseContract {
     "view"
   >;
 
+  i_quoter: TypedContractMethod<[], [string], "view">;
+
   i_router: TypedContractMethod<[], [string], "view">;
 
   i_weth: TypedContractMethod<[], [string], "view">;
@@ -357,6 +371,12 @@ export interface SwapFacility extends BaseContract {
   owner: TypedContractMethod<[], [string], "view">;
 
   pendingOwner: TypedContractMethod<[], [string], "view">;
+
+  quoteWETHForExactOutput: TypedContractMethod<
+    [outputToken: AddressLike, baseAmountOut: BigNumberish],
+    [bigint],
+    "nonpayable"
+  >;
 
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
 
@@ -425,6 +445,9 @@ export interface SwapFacility extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "i_quoter"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "i_router"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -436,6 +459,13 @@ export interface SwapFacility extends BaseContract {
   getFunction(
     nameOrSignature: "pendingOwner"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "quoteWETHForExactOutput"
+  ): TypedContractMethod<
+    [outputToken: AddressLike, baseAmountOut: BigNumberish],
+    [bigint],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "renounceOwnership"
   ): TypedContractMethod<[], [void], "nonpayable">;

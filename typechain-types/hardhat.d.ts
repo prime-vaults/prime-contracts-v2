@@ -154,6 +154,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IPrimeCDO__factory>;
     getContractFactory(
+      name: "IQuoterV2",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IQuoterV2__factory>;
+    getContractFactory(
       name: "IRatioController",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IRatioController__factory>;
@@ -462,6 +466,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IPrimeCDO>;
     getContractAt(
+      name: "IQuoterV2",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IQuoterV2>;
+    getContractAt(
       name: "IRatioController",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -768,6 +777,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IPrimeCDO>;
     deployContract(
+      name: "IQuoterV2",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IQuoterV2>;
+    deployContract(
       name: "IRatioController",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IRatioController>;
@@ -1075,6 +1088,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IPrimeCDO>;
+    deployContract(
+      name: "IQuoterV2",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IQuoterV2>;
     deployContract(
       name: "IRatioController",
       args: any[],
