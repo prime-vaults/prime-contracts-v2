@@ -215,8 +215,8 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         // 1. Update accounting
         _updateAccounting();
 
-        // 2. Validate WETH ratio
-        uint256 wethPrice = i_wethOracle.getSpotPrice();
+        // 2. Validate WETH ratio (Uniswap price as primary, Chainlink as guard)
+        (uint256 wethPrice, ) = _checkOracleDeviation();
         uint256 wethValueUSD = (wethAmount * wethPrice) / PRECISION;
         uint256 totalValueUSD = baseAmount + wethValueUSD;
 
@@ -552,8 +552,8 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     function rebalanceSellWETH() external override {
         _updateAccounting();
 
-        // 1. Compute current WETH ratio
-        uint256 wethPrice = i_wethOracle.getSpotPrice();
+        // 1. Compute current WETH ratio (Uniswap price, Chainlink guard)
+        (uint256 wethPrice, uint256 chainlinkPrice) = _checkOracleDeviation();
         uint256 wethAssets = i_aaveWETHAdapter.totalAssets();
         uint256 wethValueUSD = (wethAssets * wethPrice) / PRECISION;
         uint256 juniorTVL = i_accounting.getJuniorTVL();
@@ -577,7 +577,8 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         i_aaveWETHAdapter.withdraw(excessWETH, address(this));
 
         address baseAsset = i_strategy.baseAsset();
-        uint256 minOut = i_swapFacility.getMinOutput(excessWETH, wethPrice, false);
+        // minOut floor from Chainlink — protects against sandwich between quote and swap
+        uint256 minOut = i_swapFacility.getMinOutput(excessWETH, chainlinkPrice, false);
         IERC20(i_weth).forceApprove(address(i_swapFacility), excessWETH);
         uint256 baseReceived = i_swapFacility.swapWETHFor(baseAsset, excessWETH, minOut);
 
@@ -604,8 +605,8 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     function rebalanceBuyWETH(uint256 maxBaseToRecall) external override onlyOwner {
         _updateAccounting();
 
-        // 1. Compute current WETH ratio
-        uint256 wethPrice = i_wethOracle.getSpotPrice();
+        // 1. Compute current WETH ratio (Uniswap price, Chainlink guard)
+        (uint256 wethPrice, uint256 chainlinkPrice) = _checkOracleDeviation();
         uint256 wethAssets = i_aaveWETHAdapter.totalAssets();
         uint256 wethValueUSD = (wethAssets * wethPrice) / PRECISION;
         uint256 juniorTVL = i_accounting.getJuniorTVL();
@@ -631,9 +632,9 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         address baseAsset = i_strategy.baseAsset();
         WithdrawResult memory wr = i_strategy.withdraw(deficitUSD, baseAsset, address(this));
 
-        // 6. Swap base → WETH
+        // 6. Swap base → WETH (minOut from Chainlink floor)
         uint256 baseToSwap = wr.amountOut;
-        uint256 expectedWeth = (baseToSwap * PRECISION) / wethPrice;
+        uint256 expectedWeth = (baseToSwap * PRECISION) / chainlinkPrice;
         uint256 minWethOut = (expectedWeth * 9900) / 10_000; // 1% slippage
         IERC20(baseAsset).forceApprove(address(i_swapFacility), baseToSwap);
         uint256 wethReceived = i_swapFacility.swapForWETH(baseAsset, baseToSwap, minWethOut);
@@ -705,6 +706,29 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
+     * @dev Dual-oracle price check. Returns Uniswap pool price as the canonical price,
+     *      with Chainlink as sanity guard. Reverts if prices diverge > 2%.
+     * @return uniswapPrice Uniswap implied WETH price (18 decimals) — use as execution price
+     * @return chainlinkPrice Chainlink spot price (18 decimals) — use for minOut floor only
+     */
+    function _checkOracleDeviation() internal returns (uint256 uniswapPrice, uint256 chainlinkPrice) {
+        chainlinkPrice = i_wethOracle.getSpotPrice();
+
+        // Quote: how much WETH needed for 1e18 base (= $1)? → derive WETH price
+        address baseAsset = i_strategy.baseAsset();
+        uint256 wethFor1Base = i_swapFacility.quoteWETHForExactOutput(baseAsset, PRECISION);
+        uniswapPrice = (PRECISION * PRECISION) / wethFor1Base;
+
+        uint256 deviation = chainlinkPrice > uniswapPrice
+            ? chainlinkPrice - uniswapPrice
+            : uniswapPrice - chainlinkPrice;
+
+        if (deviation * PRECISION / chainlinkPrice > MAX_ORACLE_DEVIATION) {
+            revert PrimeVaults__OracleDeviation(uniswapPrice, chainlinkPrice);
+        }
+    }
+
+    /**
      * @dev Sync Accounting with current strategy + WETH state.
      *      If loss waterfall absorbs WETH (Layer 0), immediately withdraw + swap + restake
      *      so there is no window for ETH price to drop further.
@@ -733,21 +757,14 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
      * @param coverageUSD USD value of WETH to sell (from Accounting Layer 0)
      */
     function _executeWETHSwapAndRestake(uint256 coverageUSD) internal {
+        // Dual-oracle guard: Uniswap as execution price, Chainlink as sanity check
+        (, uint256 chainlinkPrice) = _checkOracleDeviation();
+
         address baseAsset = i_strategy.baseAsset();
 
-        // C: Quote wethNeeded from Uniswap (actual market rate)
+        // Quote wethNeeded from Uniswap (actual market rate)
         uint256 wethNeeded = i_swapFacility.quoteWETHForExactOutput(baseAsset, coverageUSD);
         if (wethNeeded == 0) return;
-
-        // B: Sanity check — Uniswap implied price vs Chainlink
-        uint256 chainlinkPrice = i_wethOracle.getSpotPrice();
-        uint256 uniswapImpliedPrice = (coverageUSD * PRECISION) / wethNeeded;
-        uint256 deviation = chainlinkPrice > uniswapImpliedPrice
-            ? chainlinkPrice - uniswapImpliedPrice
-            : uniswapImpliedPrice - chainlinkPrice;
-        if (deviation * PRECISION / chainlinkPrice > MAX_ORACLE_DEVIATION) {
-            revert PrimeVaults__OracleDeviation(uniswapImpliedPrice, chainlinkPrice);
-        }
 
         // Cap at available WETH in Aave
         uint256 wethAvailable = i_aaveWETHAdapter.totalAssets();
@@ -756,7 +773,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         // Withdraw WETH from Aave → swap → deposit into strategy
         i_aaveWETHAdapter.withdraw(wethNeeded, address(this));
 
-        // minOut floor: Chainlink price × (1 - emergencySlippage) — absolute protection
+        // minOut floor: Chainlink price × (1 - emergencySlippage) — sandwich protection
         uint256 minOut = i_swapFacility.getMinOutput(wethNeeded, chainlinkPrice, true);
         IERC20(i_weth).forceApprove(address(i_swapFacility), wethNeeded);
         uint256 baseRecovered = i_swapFacility.swapWETHFor(baseAsset, wethNeeded, minOut);
@@ -764,7 +781,7 @@ contract PrimeCDO is Ownable2Step, IPrimeCDO {
         IERC20(baseAsset).forceApprove(address(i_strategy), baseRecovered);
         i_strategy.deposit(baseRecovered);
 
-        // Slippage shortfall: swap returned less than oracle value → apply to base waterfall now
+        // Slippage shortfall → apply to base waterfall immediately
         if (baseRecovered < coverageUSD) {
             i_accounting.applySlippageLoss(coverageUSD - baseRecovered);
         }
