@@ -1,103 +1,86 @@
 /**
- * Read-only dashboard — protocol state, tranche info, user portfolio.
+ * Read-only dashboard — tranche info, Junior position, withdraw conditions, user requests.
  *
  * Usage:
- *   # Protocol overview:
  *   ARB_RPC_URL=<url> npx tsx lib/scripts/dashboard.ts
- *
- *   # User portfolio:
  *   ARB_RPC_URL=<url> npx tsx lib/scripts/dashboard.ts --user 0x...
- *
- *   # Junior position detail:
- *   ARB_RPC_URL=<url> npx tsx lib/scripts/dashboard.ts --junior
- *
- *   # WETH rebalance status:
- *   ARB_RPC_URL=<url> npx tsx lib/scripts/dashboard.ts --rebalance
  */
 
 import { formatUnits } from "viem";
-import { createSDK, parseFlag, hasFlag } from "./config";
+import { createSDK, parseFlag } from "./config";
+import { CooldownType } from "../types";
+
+const MECHANISM_NAMES: Record<number, string> = {
+  [CooldownType.NONE]: "NONE (instant)",
+  [CooldownType.ASSETS_LOCK]: "ASSETS_LOCK",
+  [CooldownType.SHARES_LOCK]: "SHARES_LOCK",
+};
+
+function fmtUSD(val: bigint): string {
+  return `$${formatUnits(val, 18)}`;
+}
+
+function fmtPct(val: bigint): string {
+  return `${(Number(val) / 1e16).toFixed(2)}%`;
+}
+
+function fmtHours(seconds: bigint): string {
+  const h = Number(seconds) / 3600;
+  return h >= 24 ? `${(h / 24).toFixed(1)}d` : `${h.toFixed(1)}h`;
+}
 
 async function main() {
   const args = process.argv.slice(2);
   const { sdk } = createSDK();
 
   // ─────────────────────────────────────────────────────────────────
-  //  Protocol Health
+  //  Senior & Mezz Tranches
   // ─────────────────────────────────────────────────────────────────
 
-  const health = await sdk.getProtocolHealth();
-  console.log(`\n  Protocol Health`);
-  console.log(`  ───────────────────────────────────`);
-  console.log(`  Senior TVL:   $${formatUnits(health.seniorTVL, 18)}`);
-  console.log(`  Mezz TVL:     $${formatUnits(health.mezzTVL, 18)}`);
-  console.log(`  Junior TVL:   $${formatUnits(health.juniorTVL, 18)}`);
-  console.log(`  Total TVL:    $${formatUnits(health.totalTVL, 18)}`);
-  console.log(`  Strategy TVL: $${formatUnits(health.strategyTVL, 18)}`);
-  console.log(`  Coverage Sr:  ${sdk.formatRatio(health.coverageSenior)}`);
-  console.log(`  Coverage Mz:  ${sdk.formatRatio(health.coverageMezz)}`);
-  console.log(`  Paused:       ${health.shortfallPaused}`);
-
-  // ─────────────────────────────────────────────────────────────────
-  //  Tranche Info
-  // ─────────────────────────────────────────────────────────────────
-
-  const tranches = await sdk.getAllTranches();
   console.log(`\n  Tranches`);
   console.log(`  ───────────────────────────────────`);
-  for (const [label, t] of [["Senior", tranches.senior], ["Mezz", tranches.mezz], ["Junior", tranches.junior]] as const) {
-    console.log(`  ${label}: ${t.symbol} | assets=${formatUnits(t.totalAssets, 18)} | supply=${formatUnits(t.totalSupply, 18)} | price=${sdk.formatSharePrice(t.sharePrice)} | APR=${sdk.formatRatio(t.apr)}`);
+
+  for (const id of ["SENIOR", "MEZZ"] as const) {
+    const t = await sdk.getTrancheById(id);
+    console.log(
+      `  ${id}: ${t.symbol} | assets=${fmtUSD(t.totalAssets)} | supply=${formatUnits(t.totalSupply, 18)} | price=${formatUnits(t.sharePrice, 18)} | APR=${fmtPct(t.apr)}`,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────
-  //  Withdraw Conditions
+  //  Junior Tranche (dual-asset)
   // ─────────────────────────────────────────────────────────────────
 
-  const MECHANISM_NAMES: Record<number, string> = { 0: "NONE", 1: "ASSETS_LOCK", 2: "SHARES_LOCK" };
+  const jr = await sdk.getJuniorTranche();
+  console.log(
+    `  JUNIOR: ${jr.symbol} | assets=${fmtUSD(jr.totalAssets)} | supply=${formatUnits(jr.totalSupply, 18)} | price=${formatUnits(jr.sharePrice, 18)} | APR=${fmtPct(jr.apr)}`,
+  );
+  console.log(`\n  Junior Position`);
+  console.log(`  ───────────────────────────────────`);
+  console.log(`  Base TVL:  ${fmtUSD(jr.baseTVL)}`);
+  console.log(`  WETH TVL:  ${fmtUSD(jr.wethTVL)}`);
+  console.log(`  WETH:      ${formatUnits(jr.wethAmount, 18)} (${fmtUSD(jr.wethPrice)}/ETH)`);
+  console.log(`  Ratio:     ${fmtPct(jr.currentRatio)} (target 20%)`);
+  console.log(`  Aave APR:  ${fmtPct(jr.aaveAPR)}`);
+
+  // ─────────────────────────────────────────────────────────────────
+  //  Withdraw Conditions (preview with 1 share)
+  // ─────────────────────────────────────────────────────────────────
 
   console.log(`\n  Withdraw Conditions`);
   console.log(`  ───────────────────────────────────`);
-  for (const tranche of ["SENIOR", "MEZZ", "JUNIOR"] as const) {
-    const c = await sdk.previewWithdrawCondition(tranche);
-    console.log(`  ${tranche}: ${MECHANISM_NAMES[c.mechanism] ?? c.mechanism} | fee=${sdk.formatBps(c.feeBps)} | cooldown=${Number(c.cooldownDuration) / 3600}h`);
+  for (const id of ["SENIOR", "MEZZ", "JUNIOR"] as const) {
+    const w = await sdk.previewWithdraw(id, 10n ** 18n);
+    const mech = MECHANISM_NAMES[w.mechanism] ?? String(w.mechanism);
+    const fee = `${Number(w.feeBps) / 100}%`;
+    const cd = w.cooldownDuration > 0n ? fmtHours(w.cooldownDuration) : "-";
+    console.log(`  ${id}: ${mech} | fee=${fee} | cooldown=${cd}`);
   }
 
   // ─────────────────────────────────────────────────────────────────
-  //  Junior Position
+  //  User Withdraw Requests
   // ─────────────────────────────────────────────────────────────────
 
-  if (hasFlag(args, "--junior") || !parseFlag(args, "--user")) {
-    const pos = await sdk.getJuniorPosition();
-    console.log(`\n  Junior Position`);
-    console.log(`  ───────────────────────────────────`);
-    console.log(`  Base TVL:  $${formatUnits(pos.baseTVL, 18)}`);
-    console.log(`  WETH TVL:  $${formatUnits(pos.wethTVL, 18)}`);
-    console.log(`  WETH:      ${formatUnits(pos.wethAmount, 18)} ($${formatUnits(pos.wethPrice, 18)}/ETH)`);
-    console.log(`  Ratio:     ${sdk.formatRatio(pos.currentRatio)} (target 20%)`);
-    console.log(`  Aave APR:  ${sdk.formatRatio(pos.aaveAPR)}`);
-  }
-
-  // ─────────────────────────────────────────────────────────────────
-  //  WETH Rebalance
-  // ─────────────────────────────────────────────────────────────────
-
-  if (hasFlag(args, "--rebalance")) {
-    const rb = await sdk.getWETHRebalanceStatus();
-    console.log(`\n  WETH Rebalance`);
-    console.log(`  ───────────────────────────────────`);
-    console.log(`  Ratio:     ${sdk.formatRatio(rb.currentRatio)} (target ${sdk.formatRatio(rb.targetRatio)} +/- ${sdk.formatRatio(rb.tolerance)})`);
-    console.log(`  WETH:      ${formatUnits(rb.wethAmount, 18)} ($${formatUnits(rb.wethValueUSD, 18)})`);
-    console.log(`  Needs sell: ${rb.needsSell}  Needs buy: ${rb.needsBuy}`);
-    if (rb.needsSell || rb.needsBuy) {
-      console.log(`  Amount:    $${formatUnits(rb.excessOrDeficitUSD, 18)}`);
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────
-  //  User Portfolio
-  // ─────────────────────────────────────────────────────────────────
-
-  // Resolve user: --user flag, or PRIVATE_KEY env
   let userAddr = parseFlag(args, "--user");
   if (!userAddr && process.env.PRIVATE_KEY) {
     const { privateKeyToAccount } = await import("viem/accounts");
@@ -105,34 +88,28 @@ async function main() {
   }
 
   if (userAddr) {
-    const portfolio = await sdk.getUserPortfolio(userAddr);
-    console.log(`\n  Portfolio — ${userAddr}`);
+    const requests = await sdk.getUserWithdrawRequests(userAddr);
+    console.log(`\n  Withdraw Requests — ${userAddr}`);
     console.log(`  ───────────────────────────────────`);
-    console.log(`  Senior: ${formatUnits(portfolio.senior.shares, 18)} shares ($${formatUnits(portfolio.senior.assets, 18)})`);
-    console.log(`  Mezz:   ${formatUnits(portfolio.mezz.shares, 18)} shares ($${formatUnits(portfolio.mezz.assets, 18)})`);
-    console.log(`  Junior: ${formatUnits(portfolio.junior.shares, 18)} shares ($${formatUnits(portfolio.junior.assets, 18)})`);
-    console.log(`  Total:  $${formatUnits(portfolio.totalAssetsUSD, 18)}`);
-
-    // Pending withdraws
-    const pending = await sdk.getUserPendingWithdraws(userAddr);
-    console.log(`\n  Pending Withdraws: ${pending.length}`);
-    for (const pw of pending) {
-      const remaining = Number(pw.timeRemaining);
-      const remainStr = remaining > 0 ? `${(remaining / 3600).toFixed(1)}h remaining` : "ready";
-      console.log(`    #${pw.requestId} | ${formatUnits(pw.amount, 18)} | handler=${pw.handler.slice(0, 10)}... | claimable=${pw.isClaimable} | ${remainStr}`);
+    if (requests.length === 0) {
+      console.log(`  (none)`);
     }
-
-    // Claimable withdraws
-    const claimable = await sdk.getClaimableWithdraws(userAddr);
-    if (claimable.length > 0) {
-      console.log(`\n  Claimable Withdraws: ${claimable.length}`);
-      for (const cw of claimable) {
-        console.log(`    #${cw.requestId} | ${formatUnits(cw.amount, 18)} | handler=${cw.handler.slice(0, 10)}...`);
-      }
+    for (const r of requests) {
+      const status = r.isClaimable
+        ? "CLAIMABLE"
+        : r.timeRemaining > 0n
+          ? `${fmtHours(r.timeRemaining)} left`
+          : "PENDING";
+      console.log(
+        `  #${r.requestId} | ${formatUnits(r.amount, 18)} | ${status} | handler=${r.handler.slice(0, 10)}...`,
+      );
     }
   }
 
   console.log();
 }
 
-main().catch((err) => { console.error(`\n  Error: ${err.message}\n`); process.exitCode = 1; });
+main().catch((err) => {
+  console.error(`\n  Error: ${err.message}\n`);
+  process.exitCode = 1;
+});

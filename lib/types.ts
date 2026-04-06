@@ -32,7 +32,46 @@ export interface TrancheInfo {
   totalAssets: bigint;
   totalSupply: bigint;
   sharePrice: bigint;
+  asset: string;
   apr: bigint;
+}
+
+export interface JuniorTrancheInfo extends TrancheInfo {
+  baseTVL: bigint;
+  wethTVL: bigint;
+  wethAmount: bigint;
+  wethPrice: bigint;
+  currentRatio: bigint;
+  aaveAPR: bigint;
+}
+
+export interface PreviewDeposit {
+  trancheId: TrancheId;
+  shares: bigint;
+  sharePrice: bigint;
+  totalBaseValue: bigint;
+}
+
+export interface PreviewJuniorDeposit extends PreviewDeposit {
+  baseAmount: bigint;
+  wethAmount: bigint;
+  wethValueUSD: bigint;
+  wethPrice: bigint;
+  wethRatio: bigint;
+}
+
+export interface PreviewWithdraw {
+  trancheId: TrancheId;
+  mechanism: CooldownType;
+  cooldownDuration: bigint;
+  feeBps: bigint;
+  feeAmount: bigint;
+  netBaseAmount: bigint;
+  baseAmountOut: bigint;
+  /** Junior only: proportional WETH returned */
+  wethAmount: bigint;
+  /** Junior only: WETH USD value */
+  wethValueUSD: bigint;
 }
 
 export interface JuniorPosition {

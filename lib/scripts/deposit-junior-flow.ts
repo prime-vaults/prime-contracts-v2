@@ -9,8 +9,9 @@
  *   ARB_RPC_URL=<url> PRIVATE_KEY=<key> npx tsx lib/scripts/deposit-junior-flow.ts --amount 100 --dry-run
  */
 
-import { parseUnits, formatUnits, formatEther, type Hash } from "viem";
+import { parseUnits, formatUnits, type Hash } from "viem";
 import { createSDK, createWallet, waitForTx, parseFlag, hasFlag, USDAI, WETH } from "./config";
+import { TRANCHE_VAULT_ABI, ERC20_ABI } from "../abis";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -27,13 +28,18 @@ async function main() {
   console.log(`  Base:    ${amount} USD.AI\n`);
 
   // 1. Estimate WETH needed
-  const estimate = await sdk.estimateWETHAmount(baseAmount);
+  const estimate = await sdk.getWethNeeded(baseAmount);
   console.log(`  WETH price:  $${formatUnits(estimate.wethPrice, 18)}`);
-  console.log(`  Ratio:       ${sdk.formatRatio(estimate.targetRatio)}`);
+  console.log(`  Ratio:       ${(Number(estimate.ratioTarget) / 1e16).toFixed(2)}%`);
   console.log(`  USD.AI:      ${formatUnits(baseAmount, 18)}`);
-  console.log(`  WETH needed: ${formatUnits(estimate.wethAmount, 18)} ($${formatUnits(estimate.wethValueUSD, 18)})`);
+  console.log(`  WETH needed: ${formatUnits(estimate.wethNeeded, 18)} ($${formatUnits(estimate.wethValueUSD, 18)})`);
 
-  // 2. Check balances
+  // 2. Preview Junior deposit
+  const preview = await sdk.previewJuniorDeposit(baseAmount, estimate.wethNeeded);
+  console.log(`  Preview shares: ${formatUnits(preview.shares, 18)}`);
+  console.log(`  WETH ratio:     ${(Number(preview.wethRatio) / 1e16).toFixed(2)}%`);
+
+  // 3. Check balances
   const [usdaiBalance, wethBalance] = await Promise.all([
     sdk.getTokenBalance(USDAI, user),
     sdk.getTokenBalance(WETH, user),
@@ -42,38 +48,65 @@ async function main() {
   console.log(`  WETH balance:   ${formatUnits(wethBalance, 18)}`);
 
   if (usdaiBalance < baseAmount) throw new Error(`Insufficient USD.AI`);
-  if (wethBalance < estimate.wethAmount) throw new Error(`Insufficient WETH`);
+  if (wethBalance < estimate.wethNeeded) throw new Error(`Insufficient WETH`);
 
-  if (dryRun) { console.log(`\n  Dry run — no tx sent.\n`); return; }
+  if (dryRun) {
+    console.log(`\n  Dry run — no tx sent.\n`);
+    return;
+  }
 
-  // 3. Approve USD.AI
-  const juniorVault = addresses.juniorVault;
+  const juniorVault = addresses.juniorVault as `0x${string}`;
+
+  // 4. Approve USD.AI
   const usdaiAllowance = await sdk.getTokenAllowance(USDAI, user, juniorVault);
   if (usdaiAllowance < baseAmount) {
     console.log(`\n  Approving USD.AI...`);
-    const r = await sdk.approveVaultDeposit(walletClient, "JUNIOR", USDAI, baseAmount);
-    await waitForTx(publicClient, r.hash as Hash, "Approve USD.AI");
+    const hash = await walletClient.writeContract({
+      address: USDAI as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [juniorVault, baseAmount],
+      chain: walletClient.chain,
+      account,
+    });
+    await waitForTx(publicClient, hash as Hash, "Approve USD.AI");
   }
 
-  // 4. Approve WETH
+  // 5. Approve WETH
   const wethAllowance = await sdk.getTokenAllowance(WETH, user, juniorVault);
-  if (wethAllowance < estimate.wethAmount) {
+  if (wethAllowance < estimate.wethNeeded) {
     console.log(`  Approving WETH...`);
-    const r = await sdk.approveToken(walletClient, WETH, juniorVault, estimate.wethAmount);
-    await waitForTx(publicClient, r.hash as Hash, "Approve WETH");
+    const hash = await walletClient.writeContract({
+      address: WETH as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [juniorVault, estimate.wethNeeded],
+      chain: walletClient.chain,
+      account,
+    });
+    await waitForTx(publicClient, hash as Hash, "Approve WETH");
   }
 
-  // 5. Deposit
+  // 6. Deposit
   const sharesBefore = await sdk.getShareBalance("JUNIOR", user);
   console.log(`  Depositing into Junior...`);
-  const r = await sdk.depositJunior(walletClient, baseAmount, estimate.wethAmount, user);
-  console.log(`  Gas: ${r.gasEstimate} | Fee: ~${formatEther(r.estimatedFeeWei)} ETH`);
-  await waitForTx(publicClient, r.hash as Hash, "DepositJunior");
+  const hash = await walletClient.writeContract({
+    address: juniorVault,
+    abi: TRANCHE_VAULT_ABI,
+    functionName: "depositJunior",
+    args: [baseAmount, estimate.wethNeeded, user],
+    chain: walletClient.chain,
+    account,
+  });
+  await waitForTx(publicClient, hash as Hash, "DepositJunior");
 
-  // 6. Verify
+  // 7. Verify
   const sharesAfter = await sdk.getShareBalance("JUNIOR", user);
   console.log(`\n  Shares received: ${formatUnits(sharesAfter - sharesBefore, 18)}`);
   console.log(`  Done.\n`);
 }
 
-main().catch((err) => { console.error(`\n  Error: ${err.message}\n`); process.exitCode = 1; });
+main().catch((err) => {
+  console.error(`\n  Error: ${err.message}\n`);
+  process.exitCode = 1;
+});

@@ -16,8 +16,9 @@
  * Env: ARB_RPC_URL, PRIVATE_KEY
  */
 
-import { parseUnits, formatUnits, formatEther, type Hash } from "viem";
+import { parseUnits, formatUnits, decodeEventLog, type Hash } from "viem";
 import { createSDK, createWallet, waitForTx, parseFlag, hasFlag } from "./config";
+import { TRANCHE_VAULT_ABI } from "../abis";
 import type { TrancheId } from "../types";
 
 const MECHANISM_NAMES: Record<number, string> = {
@@ -38,7 +39,7 @@ async function requestWithdraw() {
 
   if (!["SENIOR", "MEZZ", "JUNIOR"].includes(tranche)) throw new Error(`Invalid tranche: ${tranche}`);
 
-  const { sdk, publicClient } = createSDK();
+  const { sdk, publicClient, addresses } = createSDK();
   const { account, walletClient } = createWallet();
   const user = account.address;
   const withdrawShares = parseUnits(shares, 18);
@@ -57,22 +58,18 @@ async function requestWithdraw() {
   const previewAssets = await sdk.previewRedeem(tranche, withdrawShares);
   console.log(`  Preview value: ${formatUnits(previewAssets, 18)} USD`);
 
-  // 3. Withdraw condition
-  const condition = await sdk.previewWithdrawCondition(tranche);
-  console.log(`\n  Mechanism: ${MECHANISM_NAMES[condition.mechanism] ?? condition.mechanism}`);
-  console.log(`  Fee:       ${sdk.formatBps(condition.feeBps)}`);
-  console.log(`  Cooldown:  ${Number(condition.cooldownDuration) / 3600}h`);
-
-  // 4. Junior estimate
-  if (tranche === "JUNIOR") {
-    const est = await sdk.estimateJuniorWithdraw(withdrawShares);
-    console.log(`\n  Junior Estimate:`);
-    console.log(`    Base:  ${formatUnits(est.netBaseAmount, 18)} sUSDai (fee: ${formatUnits(est.feeAmount, 18)})`);
-    console.log(`    WETH:  ${formatUnits(est.wethAmount, 18)} ($${formatUnits(est.wethValueUSD, 18)})`);
+  // 3. Preview withdraw (mechanism, fee, cooldown, and Junior WETH)
+  const preview = await sdk.previewWithdraw(tranche, withdrawShares);
+  console.log(`\n  Mechanism: ${MECHANISM_NAMES[preview.mechanism] ?? preview.mechanism}`);
+  console.log(`  Fee:       ${Number(preview.feeBps) / 100}% (${formatUnits(preview.feeAmount, 18)})`);
+  console.log(`  Cooldown:  ${Number(preview.cooldownDuration) / 3600}h`);
+  console.log(`  Net base:  ${formatUnits(preview.netBaseAmount, 18)} sUSDai`);
+  if (tranche === "JUNIOR" && preview.wethAmount > 0n) {
+    console.log(`  WETH:      ${formatUnits(preview.wethAmount, 18)} ($${formatUnits(preview.wethValueUSD, 18)})`);
   }
 
-  // 5. Pending withdraws
-  const pending = await sdk.getUserPendingWithdraws(user);
+  // 4. Pending withdraws
+  const pending = await sdk.getUserWithdrawRequests(user);
   if (pending.length > 0) {
     console.log(`\n  Pending withdraws: ${pending.length}`);
     for (const pw of pending) {
@@ -80,41 +77,61 @@ async function requestWithdraw() {
     }
   }
 
-  if (dryRun) { console.log(`\n  Dry run — no tx sent.\n`); return; }
-
-  // 6. Request withdraw
-  console.log(`\n  Requesting withdraw...`);
-  const result = await sdk.requestWithdraw(walletClient, tranche, withdrawShares);
-  console.log(`  Gas: ${result.gasEstimate} | Fee: ~${formatEther(result.estimatedFeeWei)} ETH`);
-
-  const wr = result.withdrawResult;
-  console.log(`\n  Result:`);
-  console.log(`    Instant:    ${wr.isInstant}`);
-  console.log(`    AmountOut:  ${formatUnits(wr.amountOut, 18)}`);
-  console.log(`    Mechanism:  ${MECHANISM_NAMES[wr.appliedCooldownType] ?? wr.appliedCooldownType}`);
-  console.log(`    CooldownId: ${wr.cooldownId}`);
-  console.log(`    Fee:        ${formatUnits(wr.feeAmount, 18)}`);
-  if (wr.wethAmount > 0n) {
-    console.log(`    WETH:       ${formatUnits(wr.wethAmount, 18)}`);
-    if (wr.wethCooldownId > 0n) console.log(`    WETH CdId:  ${wr.wethCooldownId}`);
+  if (dryRun) {
+    console.log(`\n  Dry run — no tx sent.\n`);
+    return;
   }
 
-  // 7. Next action
-  const next = result.nextAction;
-  console.log(`\n  Next: ${next.type}`);
-  switch (next.type) {
-    case "DONE":
-      console.log(`  Withdraw complete. sUSDai + WETH received.\n`);
-      break;
-    case "CLAIM_COOLDOWN":
-      console.log(`  CooldownId: ${next.cooldownId} | Handler: ${next.cooldownHandler}`);
-      if (next.wethCooldownId > 0n) console.log(`  WETH CdId:  ${next.wethCooldownId} (claim separately)`);
-      console.log(`  Run: --claim --cooldown-id ${next.cooldownId} --tranche ${tranche}\n`);
-      break;
-    case "CLAIM_SHARES":
-      console.log(`  CooldownId: ${next.cooldownId}`);
-      console.log(`  Run: --claim-shares --cooldown-id ${next.cooldownId} --tranche ${tranche}\n`);
-      break;
+  // 5. Request withdraw
+  const vaultAddr = (
+    tranche === "SENIOR" ? addresses.seniorVault : tranche === "MEZZ" ? addresses.mezzVault : addresses.juniorVault
+  ) as `0x${string}`;
+
+  console.log(`\n  Requesting withdraw...`);
+  const hash = await walletClient.writeContract({
+    address: vaultAddr,
+    abi: TRANCHE_VAULT_ABI,
+    functionName: "requestWithdraw",
+    args: [withdrawShares, user],
+    chain: walletClient.chain,
+    account,
+  });
+  const receipt = await waitForTx(publicClient, hash as Hash, "RequestWithdraw");
+
+  // 6. Parse WithdrawRequested event
+  const withdrawEvent = receipt.logs
+    .map((log) => {
+      try {
+        return decodeEventLog({ abi: TRANCHE_VAULT_ABI, data: log.data, topics: log.topics });
+      } catch {
+        return null;
+      }
+    })
+    .find((e) => e?.eventName === "WithdrawRequested");
+
+  if (withdrawEvent && "args" in withdrawEvent) {
+    const wr = (withdrawEvent.args as any).result;
+    console.log(`\n  Result:`);
+    console.log(`    Instant:    ${wr.isInstant}`);
+    console.log(`    AmountOut:  ${formatUnits(wr.amountOut, 18)}`);
+    console.log(`    Mechanism:  ${MECHANISM_NAMES[Number(wr.appliedCooldownType)] ?? wr.appliedCooldownType}`);
+    console.log(`    CooldownId: ${wr.cooldownId}`);
+    console.log(`    Fee:        ${formatUnits(wr.feeAmount, 18)}`);
+    if (wr.wethAmount > 0n) {
+      console.log(`    WETH:       ${formatUnits(wr.wethAmount, 18)}`);
+      if (wr.wethCooldownId > 0n) console.log(`    WETH CdId:  ${wr.wethCooldownId}`);
+    }
+
+    // Next action hint
+    if (wr.isInstant) {
+      console.log(`\n  Withdraw complete. sUSDai received.\n`);
+    } else if (Number(wr.appliedCooldownType) === 2) {
+      console.log(`\n  Next: --claim-shares --cooldown-id ${wr.cooldownId} --tranche ${tranche}\n`);
+    } else {
+      console.log(`\n  Next: --claim --cooldown-id ${wr.cooldownId} --tranche ${tranche}\n`);
+    }
+  } else {
+    console.log(`\n  Tx confirmed. Check pending withdraws for status.\n`);
   }
 }
 
@@ -130,27 +147,41 @@ async function claimCooldown() {
 
   if (!cooldownId) throw new Error("--cooldown-id required");
 
-  const { sdk, publicClient } = createSDK();
+  const { sdk, publicClient, addresses } = createSDK();
   const { account, walletClient } = createWallet();
   const user = account.address;
 
   console.log(`\n  Claim Cooldown — ${tranche} #${cooldownId}`);
 
-  const claimable = await sdk.getClaimableWithdraws(user);
-  console.log(`  Claimable: ${claimable.length}`);
+  const requests = await sdk.getUserWithdrawRequests(user);
+  const claimable = requests.filter((r) => r.isClaimable);
+  console.log(`  Requests: ${requests.length} total, ${claimable.length} claimable`);
   for (const cw of claimable) {
-    console.log(`    #${cw.requestId} | ${formatUnits(cw.amount, 18)} | handler=${cw.handler}`);
+    console.log(`    #${cw.requestId} | ${formatUnits(cw.amount, 18)} | handler=${cw.handler.slice(0, 10)}...`);
   }
 
-  if (dryRun) { console.log(`\n  Dry run.\n`); return; }
+  if (dryRun) {
+    console.log(`\n  Dry run.\n`);
+    return;
+  }
 
   const target = claimable.find((c) => c.requestId === BigInt(cooldownId));
   if (!target) throw new Error(`Cooldown #${cooldownId} not found or not claimable`);
 
+  const vaultAddr = (
+    tranche === "SENIOR" ? addresses.seniorVault : tranche === "MEZZ" ? addresses.mezzVault : addresses.juniorVault
+  ) as `0x${string}`;
+
   console.log(`  Claiming #${cooldownId}...`);
-  const r = await sdk.claimWithdraw(walletClient, tranche, BigInt(cooldownId), target.handler);
-  console.log(`  Gas: ${r.gasEstimate} | Fee: ~${formatEther(r.estimatedFeeWei)} ETH`);
-  await waitForTx(publicClient, r.hash as Hash, "ClaimWithdraw");
+  const hash = await walletClient.writeContract({
+    address: vaultAddr,
+    abi: TRANCHE_VAULT_ABI,
+    functionName: "claimWithdraw",
+    args: [BigInt(cooldownId), target.handler as `0x${string}`],
+    chain: walletClient.chain,
+    account,
+  });
+  await waitForTx(publicClient, hash as Hash, "ClaimWithdraw");
   console.log(`  Done.\n`);
 }
 
@@ -166,17 +197,30 @@ async function claimShares() {
 
   if (!cooldownId) throw new Error("--cooldown-id required");
 
-  const { sdk, publicClient } = createSDK();
-  const { walletClient } = createWallet();
+  const { publicClient, addresses } = createSDK();
+  const { account, walletClient } = createWallet();
 
   console.log(`\n  Claim Shares Lock — ${tranche} #${cooldownId}`);
 
-  if (dryRun) { console.log(`  Dry run.\n`); return; }
+  if (dryRun) {
+    console.log(`  Dry run.\n`);
+    return;
+  }
+
+  const vaultAddr = (
+    tranche === "SENIOR" ? addresses.seniorVault : tranche === "MEZZ" ? addresses.mezzVault : addresses.juniorVault
+  ) as `0x${string}`;
 
   console.log(`  Claiming shares cooldown #${cooldownId}...`);
-  const r = await sdk.claimSharesWithdraw(walletClient, tranche, BigInt(cooldownId));
-  console.log(`  Gas: ${r.gasEstimate} | Fee: ~${formatEther(r.estimatedFeeWei)} ETH`);
-  await waitForTx(publicClient, r.hash as Hash, "ClaimSharesWithdraw");
+  const hash = await walletClient.writeContract({
+    address: vaultAddr,
+    abi: TRANCHE_VAULT_ABI,
+    functionName: "claimSharesWithdraw",
+    args: [BigInt(cooldownId)],
+    chain: walletClient.chain,
+    account,
+  });
+  await waitForTx(publicClient, hash as Hash, "ClaimSharesWithdraw");
   console.log(`  Done.\n`);
 }
 
@@ -187,9 +231,18 @@ async function claimShares() {
 const args = process.argv.slice(2);
 
 if (hasFlag(args, "--claim-shares")) {
-  claimShares().catch((e) => { console.error(`\n  Error: ${e.message}\n`); process.exitCode = 1; });
+  claimShares().catch((e) => {
+    console.error(`\n  Error: ${e.message}\n`);
+    process.exitCode = 1;
+  });
 } else if (hasFlag(args, "--claim")) {
-  claimCooldown().catch((e) => { console.error(`\n  Error: ${e.message}\n`); process.exitCode = 1; });
+  claimCooldown().catch((e) => {
+    console.error(`\n  Error: ${e.message}\n`);
+    process.exitCode = 1;
+  });
 } else {
-  requestWithdraw().catch((e) => { console.error(`\n  Error: ${e.message}\n`); process.exitCode = 1; });
+  requestWithdraw().catch((e) => {
+    console.error(`\n  Error: ${e.message}\n`);
+    process.exitCode = 1;
+  });
 }

@@ -298,9 +298,7 @@ export const TRANCHE_VAULT_ABI = [
     type: "function",
   },
   {
-    inputs: [
-      { name: "cooldownId", type: "uint256" },
-    ],
+    inputs: [{ name: "cooldownId", type: "uint256" }],
     name: "claimSharesWithdraw",
     outputs: [{ name: "amountOut", type: "uint256" }],
     stateMutability: "nonpayable",
@@ -487,13 +485,10 @@ export const ACCOUNTING_ABI = [
 
 export const ERC20_ABI = [
   {
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    name: "approve",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "nonpayable",
+    inputs: [{ name: "account", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
     type: "function",
   },
   {
@@ -507,30 +502,29 @@ export const ERC20_ABI = [
     type: "function",
   },
   {
-    inputs: [{ name: "account", type: "address" }],
-    name: "balanceOf",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "approve",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+export const PRIME_CDO_ABI = [
+  {
+    inputs: [],
+    name: "s_ratioTarget",
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
   {
     inputs: [],
-    name: "decimals",
-    outputs: [{ name: "", type: "uint8" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "symbol",
-    outputs: [{ name: "", type: "string" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "name",
-    outputs: [{ name: "", type: "string" }],
+    name: "s_ratioTolerance",
+    outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
