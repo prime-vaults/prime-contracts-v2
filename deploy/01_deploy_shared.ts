@@ -10,7 +10,7 @@
 
 import hre from "hardhat";
 import "@nomicfoundation/hardhat-ethers";
-import { ARBITRUM, DEFAULTS, saveDeployed } from "./addresses";
+import { ARBITRUM, saveDeployed } from "./addresses";
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
@@ -47,7 +47,7 @@ async function main() {
 
   const SwapFactory = await hre.ethers.getContractFactory("SwapFacility");
   const swapFacility = await SwapFactory.deploy(
-    ARBITRUM.UNISWAP_V3_ROUTER, ARBITRUM.WETH, deployer.address,
+    ARBITRUM.UNISWAP_V3_ROUTER, ARBITRUM.UNISWAP_V3_QUOTER, ARBITRUM.WETH, deployer.address,
   );
   await swapFacility.waitForDeployment();
   const swapFacilityAddr = await swapFacility.getAddress();
@@ -58,9 +58,7 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════
 
   const ERC20CooldownFactory = await hre.ethers.getContractFactory("ERC20Cooldown");
-  const erc20Cooldown = await ERC20CooldownFactory.deploy(
-    deployer.address, DEFAULTS.ERC20_COOLDOWN_DURATION,
-  );
+  const erc20Cooldown = await ERC20CooldownFactory.deploy(deployer.address);
   await erc20Cooldown.waitForDeployment();
   const erc20CooldownAddr = await erc20Cooldown.getAddress();
   console.log(`  ERC20Cooldown:     ${erc20CooldownAddr}`);
@@ -70,9 +68,7 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════
 
   const SharesCooldownFactory = await hre.ethers.getContractFactory("SharesCooldown");
-  const sharesCooldown = await SharesCooldownFactory.deploy(
-    deployer.address, DEFAULTS.SHARES_COOLDOWN_DURATION,
-  );
+  const sharesCooldown = await SharesCooldownFactory.deploy(deployer.address);
   await sharesCooldown.waitForDeployment();
   const sharesCooldownAddr = await sharesCooldown.getAddress();
   console.log(`  SharesCooldown:    ${sharesCooldownAddr}`);

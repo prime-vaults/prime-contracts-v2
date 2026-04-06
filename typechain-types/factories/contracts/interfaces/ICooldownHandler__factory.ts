@@ -202,6 +202,11 @@ const _abi = [
         name: "amount",
         type: "uint256",
       },
+      {
+        internalType: "uint256",
+        name: "duration",
+        type: "uint256",
+      },
     ],
     name: "request",
     outputs: [

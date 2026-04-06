@@ -31,7 +31,7 @@ describe("ERC20Cooldown", () => {
 
     // Deploy ERC20Cooldown
     const CooldownFactory = await ethers.getContractFactory("ERC20Cooldown");
-    cooldown = await CooldownFactory.deploy(owner.address, COOLDOWN_DURATION, EXPIRY_WINDOW);
+    cooldown = await CooldownFactory.deploy(owner.address);
 
     // Authorize caller
     await cooldown.connect(owner).setAuthorized(authorized.address, true);
@@ -48,7 +48,7 @@ describe("ERC20Cooldown", () => {
   describe("request", () => {
     it("should create PENDING request and lock tokens", async () => {
       const tokenAddr = await mockToken.getAddress();
-      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 1000n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 1000n * E18, COOLDOWN_DURATION);
 
       // Tokens locked in cooldown contract
       expect(await mockToken.balanceOf(await cooldown.getAddress())).to.equal(1000n * E18);
@@ -62,7 +62,7 @@ describe("ERC20Cooldown", () => {
     });
 
     it("should set correct unlockTime and expiryTime", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18, COOLDOWN_DURATION);
 
       const req = await cooldown.getRequest(1);
       const now = BigInt(await time.latest());
@@ -72,8 +72,8 @@ describe("ERC20Cooldown", () => {
 
     it("should increment request IDs globally", async () => {
       const tokenAddr = await mockToken.getAddress();
-      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 100n * E18);
-      await cooldown.connect(authorized).request(other.address, tokenAddr, 200n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 100n * E18, COOLDOWN_DURATION);
+      await cooldown.connect(authorized).request(other.address, tokenAddr, 200n * E18, COOLDOWN_DURATION);
 
       expect((await cooldown.getRequest(1)).amount).to.equal(100n * E18);
       expect((await cooldown.getRequest(2)).amount).to.equal(200n * E18);
@@ -82,7 +82,7 @@ describe("ERC20Cooldown", () => {
 
     it("should emit CooldownRequested event", async () => {
       await expect(
-        cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 500n * E18),
+        cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 500n * E18, COOLDOWN_DURATION),
       ).to.emit(cooldown, "CooldownRequested");
     });
   });
@@ -93,7 +93,7 @@ describe("ERC20Cooldown", () => {
 
   describe("claim after unlockTime", () => {
     beforeEach(async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18, COOLDOWN_DURATION);
     });
 
     it("should transfer tokens to beneficiary", async () => {
@@ -137,7 +137,7 @@ describe("ERC20Cooldown", () => {
 
   describe("claim before unlockTime", () => {
     it("should revert with CooldownNotReady", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18, COOLDOWN_DURATION);
 
       // Only advance halfway
       await time.increase(COOLDOWN_DURATION / 2);
@@ -153,7 +153,7 @@ describe("ERC20Cooldown", () => {
 
   describe("claim twice", () => {
     it("should revert with AlreadyClaimed", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18, COOLDOWN_DURATION);
       await time.increase(COOLDOWN_DURATION);
       await cooldown.claim(1);
 
@@ -168,7 +168,7 @@ describe("ERC20Cooldown", () => {
 
   describe("expired request", () => {
     it("should revert with Expired when past expiryTime", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18, COOLDOWN_DURATION);
 
       // Advance well past unlock + expiry
       await time.increase(COOLDOWN_DURATION + EXPIRY_WINDOW + 100);
@@ -178,7 +178,7 @@ describe("ERC20Cooldown", () => {
     });
 
     it("should succeed when claimed within expiry window", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18, COOLDOWN_DURATION);
 
       // Advance to middle of expiry window (after unlock but before expiry)
       await time.increase(COOLDOWN_DURATION + EXPIRY_WINDOW / 2);
@@ -195,9 +195,9 @@ describe("ERC20Cooldown", () => {
   describe("getPendingRequests", () => {
     it("should return correct pending IDs", async () => {
       const tokenAddr = await mockToken.getAddress();
-      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 100n * E18);
-      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 200n * E18);
-      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 300n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 100n * E18, COOLDOWN_DURATION);
+      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 200n * E18, COOLDOWN_DURATION);
+      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 300n * E18, COOLDOWN_DURATION);
 
       const pending = await cooldown.getPendingRequests(beneficiary.address);
       expect(pending.length).to.equal(3);
@@ -208,8 +208,8 @@ describe("ERC20Cooldown", () => {
 
     it("should exclude claimed requests", async () => {
       const tokenAddr = await mockToken.getAddress();
-      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 100n * E18);
-      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 200n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 100n * E18, COOLDOWN_DURATION);
+      await cooldown.connect(authorized).request(beneficiary.address, tokenAddr, 200n * E18, COOLDOWN_DURATION);
 
       await time.increase(COOLDOWN_DURATION);
       await cooldown.claim(1); // claim first
@@ -231,7 +231,7 @@ describe("ERC20Cooldown", () => {
 
   describe("isClaimable", () => {
     beforeEach(async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 1000n * E18, COOLDOWN_DURATION);
     });
 
     it("should return false before unlockTime", async () => {
@@ -261,7 +261,7 @@ describe("ERC20Cooldown", () => {
 
   describe("timeRemaining", () => {
     it("should return full duration right after request", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18, COOLDOWN_DURATION);
       const remaining = await cooldown.timeRemaining(1);
       // Should be close to COOLDOWN_DURATION (allow ±2 for block time)
       expect(remaining).to.be.gte(COOLDOWN_DURATION - 2);
@@ -269,7 +269,7 @@ describe("ERC20Cooldown", () => {
     });
 
     it("should decrease over time", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18, COOLDOWN_DURATION);
 
       await time.increase(86400); // 1 day
       const remaining = await cooldown.timeRemaining(1);
@@ -278,13 +278,13 @@ describe("ERC20Cooldown", () => {
     });
 
     it("should return 0 after unlockTime", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18, COOLDOWN_DURATION);
       await time.increase(COOLDOWN_DURATION);
       expect(await cooldown.timeRemaining(1)).to.equal(0);
     });
 
     it("should return 0 after claimed", async () => {
-      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18);
+      await cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18, COOLDOWN_DURATION);
       await time.increase(COOLDOWN_DURATION);
       await cooldown.claim(1);
       expect(await cooldown.timeRemaining(1)).to.equal(0);
@@ -298,7 +298,7 @@ describe("ERC20Cooldown", () => {
   describe("access control", () => {
     it("should revert request from non-authorized caller", async () => {
       await expect(
-        cooldown.connect(other).request(beneficiary.address, await mockToken.getAddress(), 100n * E18),
+        cooldown.connect(other).request(beneficiary.address, await mockToken.getAddress(), 100n * E18, COOLDOWN_DURATION),
       ).to.be.revertedWithCustomError(cooldown, "PrimeVaults__Unauthorized");
     });
 
@@ -308,7 +308,7 @@ describe("ERC20Cooldown", () => {
       await mockToken.connect(other).approve(await cooldown.getAddress(), ethers.MaxUint256);
 
       await expect(
-        cooldown.connect(other).request(beneficiary.address, await mockToken.getAddress(), 100n * E18),
+        cooldown.connect(other).request(beneficiary.address, await mockToken.getAddress(), 100n * E18, COOLDOWN_DURATION),
       ).to.not.be.reverted;
     });
 
@@ -316,7 +316,7 @@ describe("ERC20Cooldown", () => {
       await cooldown.connect(owner).setAuthorized(authorized.address, false);
 
       await expect(
-        cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18),
+        cooldown.connect(authorized).request(beneficiary.address, await mockToken.getAddress(), 100n * E18, COOLDOWN_DURATION),
       ).to.be.revertedWithCustomError(cooldown, "PrimeVaults__Unauthorized");
     });
   });

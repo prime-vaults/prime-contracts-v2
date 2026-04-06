@@ -62,12 +62,14 @@ interface ICooldownHandler {
     /**
      * @notice Create a new cooldown withdrawal request
      * @dev Only callable by authorized contracts (CDOs, strategies). Locks tokens/shares.
+     *      Duration is passed by the caller (from RedemptionPolicy) — single source of truth.
      * @param beneficiary Address that will receive tokens when claimed
      * @param token Token being withdrawn
      * @param amount Amount to lock in cooldown
+     * @param duration Cooldown duration in seconds (from RedemptionPolicy)
      * @return requestId Globally unique request ID
      */
-    function request(address beneficiary, address token, uint256 amount) external returns (uint256 requestId);
+    function request(address beneficiary, address token, uint256 amount, uint256 duration) external returns (uint256 requestId);
 
     /**
      * @notice Claim a completed cooldown request and transfer tokens to beneficiary

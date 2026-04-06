@@ -26,7 +26,7 @@ describe("SharesCooldown", () => {
 
     // Deploy SharesCooldown
     const CooldownFactory = await ethers.getContractFactory("SharesCooldown");
-    cooldown = await CooldownFactory.deploy(owner.address, COOLDOWN_DURATION);
+    cooldown = await CooldownFactory.deploy(owner.address);
 
     // Authorize CDO caller
     await cooldown.connect(owner).setAuthorized(cdoCaller.address, true);
@@ -43,7 +43,7 @@ describe("SharesCooldown", () => {
   describe("request", () => {
     it("should escrow shares from caller (not burn them)", async () => {
       const sharesAddr = await mockShares.getAddress();
-      await cooldown.connect(cdoCaller).request(beneficiary.address, sharesAddr, 1000n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, sharesAddr, 1000n * E18, COOLDOWN_DURATION);
 
       // Shares held by cooldown contract (escrowed, not burned)
       expect(await mockShares.balanceOf(await cooldown.getAddress())).to.equal(1000n * E18);
@@ -54,7 +54,7 @@ describe("SharesCooldown", () => {
     });
 
     it("should create PENDING request with correct fields", async () => {
-      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 500n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 500n * E18, COOLDOWN_DURATION);
 
       const req = await cooldown.getRequest(1);
       expect(req.beneficiary).to.equal(beneficiary.address);
@@ -63,13 +63,13 @@ describe("SharesCooldown", () => {
     });
 
     it("should store original caller for return on claim", async () => {
-      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 500n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 500n * E18, COOLDOWN_DURATION);
       expect(await cooldown.s_requestCaller(1)).to.equal(cdoCaller.address);
     });
 
     it("should emit CooldownRequested event", async () => {
       await expect(
-        cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 500n * E18),
+        cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 500n * E18, COOLDOWN_DURATION),
       ).to.emit(cooldown, "CooldownRequested");
     });
   });
@@ -80,7 +80,7 @@ describe("SharesCooldown", () => {
 
   describe("claim after unlock", () => {
     beforeEach(async () => {
-      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18, COOLDOWN_DURATION);
     });
 
     it("should return shares to original caller (CDO), not beneficiary", async () => {
@@ -124,7 +124,7 @@ describe("SharesCooldown", () => {
 
   describe("claim before unlock", () => {
     it("should revert with CooldownNotReady", async () => {
-      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18, COOLDOWN_DURATION);
 
       await time.increase(COOLDOWN_DURATION / 2);
 
@@ -139,7 +139,7 @@ describe("SharesCooldown", () => {
 
   describe("claim twice", () => {
     it("should revert with AlreadyClaimed", async () => {
-      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18, COOLDOWN_DURATION);
       await time.increase(COOLDOWN_DURATION);
       await cooldown.claim(1);
 
@@ -154,7 +154,7 @@ describe("SharesCooldown", () => {
 
   describe("no expiry", () => {
     it("should still be claimable long after unlock (no expiry window)", async () => {
-      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18, COOLDOWN_DURATION);
 
       // Advance way past unlock (30 days)
       await time.increase(30 * 86400);
@@ -169,7 +169,7 @@ describe("SharesCooldown", () => {
 
   describe("view functions", () => {
     beforeEach(async () => {
-      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 1000n * E18, COOLDOWN_DURATION);
     });
 
     it("isClaimable: false before unlock, true after", async () => {
@@ -187,7 +187,7 @@ describe("SharesCooldown", () => {
     });
 
     it("getPendingRequests: returns correct IDs", async () => {
-      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 500n * E18);
+      await cooldown.connect(cdoCaller).request(beneficiary.address, await mockShares.getAddress(), 500n * E18, COOLDOWN_DURATION);
 
       const pending = await cooldown.getPendingRequests(beneficiary.address);
       expect(pending.length).to.equal(2);
@@ -208,7 +208,7 @@ describe("SharesCooldown", () => {
   describe("access control", () => {
     it("should revert request from non-authorized", async () => {
       await expect(
-        cooldown.connect(other).request(beneficiary.address, await mockShares.getAddress(), 100n * E18),
+        cooldown.connect(other).request(beneficiary.address, await mockShares.getAddress(), 100n * E18, COOLDOWN_DURATION),
       ).to.be.revertedWithCustomError(cooldown, "PrimeVaults__Unauthorized");
     });
   });

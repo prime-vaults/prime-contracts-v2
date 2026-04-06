@@ -78,7 +78,7 @@ export interface ICooldownHandlerInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "request",
-    values: [AddressLike, AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "timeRemaining",
@@ -219,7 +219,12 @@ export interface ICooldownHandler extends BaseContract {
   >;
 
   request: TypedContractMethod<
-    [beneficiary: AddressLike, token: AddressLike, amount: BigNumberish],
+    [
+      beneficiary: AddressLike,
+      token: AddressLike,
+      amount: BigNumberish,
+      duration: BigNumberish
+    ],
     [bigint],
     "nonpayable"
   >;
@@ -253,7 +258,12 @@ export interface ICooldownHandler extends BaseContract {
   getFunction(
     nameOrSignature: "request"
   ): TypedContractMethod<
-    [beneficiary: AddressLike, token: AddressLike, amount: BigNumberish],
+    [
+      beneficiary: AddressLike,
+      token: AddressLike,
+      amount: BigNumberish,
+      duration: BigNumberish
+    ],
     [bigint],
     "nonpayable"
   >;

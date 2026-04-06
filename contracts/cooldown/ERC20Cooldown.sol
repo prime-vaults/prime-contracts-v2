@@ -28,7 +28,6 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
     // ═══════════════════════════════════════════════════════════════════
 
     uint256 public s_nextRequestId;
-    uint256 public s_cooldownDuration;  // seconds until claimable
 
     mapping(uint256 => CooldownRequest) public s_requests;
     mapping(address => uint256[]) private s_beneficiaryRequests;
@@ -56,8 +55,7 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
     //  CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════
 
-    constructor(address owner_, uint256 cooldownDuration_) Ownable(owner_) {
-        s_cooldownDuration = cooldownDuration_;
+    constructor(address owner_) Ownable(owner_) {
         s_nextRequestId = 1;
     }
 
@@ -68,12 +66,13 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
     /**
      * @notice Create a new cooldown request. Locks tokens from caller.
      * @dev Only callable by authorized contracts (CDOs, strategies).
+     *      Duration passed by caller (from RedemptionPolicy) — single source of truth.
      */
-    function request(address beneficiary, address token, uint256 amount) external override onlyAuthorized returns (uint256 requestId) {
+    function request(address beneficiary, address token, uint256 amount, uint256 duration) external override onlyAuthorized returns (uint256 requestId) {
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
         requestId = s_nextRequestId++;
-        uint256 unlockTime = block.timestamp + s_cooldownDuration;
+        uint256 unlockTime = block.timestamp + duration;
 
         s_requests[requestId] = CooldownRequest({
             beneficiary: beneficiary,
@@ -155,9 +154,4 @@ contract ERC20Cooldown is Ownable2Step, ICooldownHandler {
     function setAuthorized(address addr, bool authorized) external onlyOwner {
         s_authorized[addr] = authorized;
     }
-
-    function setCooldownDuration(uint256 duration_) external onlyOwner {
-        s_cooldownDuration = duration_;
-    }
-
 }

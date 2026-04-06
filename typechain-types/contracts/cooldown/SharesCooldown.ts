@@ -61,12 +61,10 @@ export interface SharesCooldownInterface extends Interface {
       | "renounceOwnership"
       | "request"
       | "s_authorized"
-      | "s_cooldownDuration"
       | "s_nextRequestId"
       | "s_requestCaller"
       | "s_requests"
       | "setAuthorized"
-      | "setCooldownDuration"
       | "timeRemaining"
       | "transferOwnership"
   ): FunctionFragment;
@@ -107,15 +105,11 @@ export interface SharesCooldownInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "request",
-    values: [AddressLike, AddressLike, BigNumberish]
+    values: [AddressLike, AddressLike, BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "s_authorized",
     values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "s_cooldownDuration",
-    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "s_nextRequestId",
@@ -132,10 +126,6 @@ export interface SharesCooldownInterface extends Interface {
   encodeFunctionData(
     functionFragment: "setAuthorized",
     values: [AddressLike, boolean]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setCooldownDuration",
-    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "timeRemaining",
@@ -175,10 +165,6 @@ export interface SharesCooldownInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "s_cooldownDuration",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "s_nextRequestId",
     data: BytesLike
   ): Result;
@@ -189,10 +175,6 @@ export interface SharesCooldownInterface extends Interface {
   decodeFunctionResult(functionFragment: "s_requests", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "setAuthorized",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "setCooldownDuration",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -356,14 +338,17 @@ export interface SharesCooldown extends BaseContract {
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
 
   request: TypedContractMethod<
-    [beneficiary: AddressLike, token: AddressLike, amount: BigNumberish],
+    [
+      beneficiary: AddressLike,
+      token: AddressLike,
+      amount: BigNumberish,
+      duration: BigNumberish
+    ],
     [bigint],
     "nonpayable"
   >;
 
   s_authorized: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
-
-  s_cooldownDuration: TypedContractMethod<[], [bigint], "view">;
 
   s_nextRequestId: TypedContractMethod<[], [bigint], "view">;
 
@@ -386,12 +371,6 @@ export interface SharesCooldown extends BaseContract {
 
   setAuthorized: TypedContractMethod<
     [addr: AddressLike, authorized: boolean],
-    [void],
-    "nonpayable"
-  >;
-
-  setCooldownDuration: TypedContractMethod<
-    [duration_: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -443,16 +422,18 @@ export interface SharesCooldown extends BaseContract {
   getFunction(
     nameOrSignature: "request"
   ): TypedContractMethod<
-    [beneficiary: AddressLike, token: AddressLike, amount: BigNumberish],
+    [
+      beneficiary: AddressLike,
+      token: AddressLike,
+      amount: BigNumberish,
+      duration: BigNumberish
+    ],
     [bigint],
     "nonpayable"
   >;
   getFunction(
     nameOrSignature: "s_authorized"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "s_cooldownDuration"
-  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "s_nextRequestId"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -482,9 +463,6 @@ export interface SharesCooldown extends BaseContract {
     [void],
     "nonpayable"
   >;
-  getFunction(
-    nameOrSignature: "setCooldownDuration"
-  ): TypedContractMethod<[duration_: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "timeRemaining"
   ): TypedContractMethod<[requestId: BigNumberish], [bigint], "view">;

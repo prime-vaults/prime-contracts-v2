@@ -78,10 +78,10 @@ describe("PrimeCDO — Withdrawals", () => {
 
     // --- Cooldown handlers ---
     const EC20Factory = await ethers.getContractFactory("ERC20Cooldown");
-    erc20Cooldown = await EC20Factory.deploy(owner.address, 3 * DAY, 3 * DAY); // 3d cooldown, 3d expiry
+    erc20Cooldown = await EC20Factory.deploy(owner.address);
 
     const SCFactory = await ethers.getContractFactory("SharesCooldown");
-    sharesCooldown = await SCFactory.deploy(owner.address, 7 * DAY); // 7d cooldown
+    sharesCooldown = await SCFactory.deploy(owner.address);
 
     // --- RedemptionPolicy ---
     const RPFactory = await ethers.getContractFactory("RedemptionPolicy");
