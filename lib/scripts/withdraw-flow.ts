@@ -17,9 +17,9 @@
  */
 
 import { parseUnits, formatUnits, decodeEventLog, type Hash } from "viem";
-import { createSDK, createWallet, waitForTx, parseFlag, hasFlag } from "./config";
+import { createSDK, createWallet, waitForTx, parseFlag, hasFlag, parseTranche } from "./config";
 import { TRANCHE_VAULT_ABI } from "../abis";
-import type { TrancheId } from "../types";
+import { TrancheId } from "../types";
 
 const MECHANISM_NAMES: Record<number, string> = {
   0: "NONE (instant)",
@@ -33,11 +33,11 @@ const MECHANISM_NAMES: Record<number, string> = {
 
 async function requestWithdraw() {
   const args = process.argv.slice(2);
-  const tranche = (parseFlag(args, "--tranche") ?? "SENIOR").toUpperCase() as TrancheId;
+  const tranche = parseTranche(parseFlag(args, "--tranche") ?? "SENIOR");
   const shares = parseFlag(args, "--shares") ?? "1";
   const dryRun = hasFlag(args, "--dry-run");
 
-  if (!["SENIOR", "MEZZ", "JUNIOR"].includes(tranche)) throw new Error(`Invalid tranche: ${tranche}`);
+  // parseTranche already validates
 
   const { sdk, publicClient, addresses } = createSDK();
   const { account, walletClient } = createWallet();
@@ -64,7 +64,7 @@ async function requestWithdraw() {
   console.log(`  Fee:       ${Number(preview.feeBps) / 100}% (${formatUnits(preview.feeAmount, 18)})`);
   console.log(`  Cooldown:  ${Number(preview.cooldownDuration) / 3600}h`);
   console.log(`  Net base:  ${formatUnits(preview.netBaseAmount, 18)} sUSDai`);
-  if (tranche === "JUNIOR" && preview.wethAmount > 0n) {
+  if (tranche === TrancheId.JUNIOR && preview.wethAmount > 0n) {
     console.log(`  WETH:      ${formatUnits(preview.wethAmount, 18)} ($${formatUnits(preview.wethValueUSD, 18)})`);
   }
 
@@ -84,7 +84,7 @@ async function requestWithdraw() {
 
   // 5. Request withdraw
   const vaultAddr = (
-    tranche === "SENIOR" ? addresses.seniorVault : tranche === "MEZZ" ? addresses.mezzVault : addresses.juniorVault
+    tranche === TrancheId.SENIOR ? addresses.seniorVault : tranche === TrancheId.MEZZ ? addresses.mezzVault : addresses.juniorVault
   ) as `0x${string}`;
 
   console.log(`\n  Requesting withdraw...`);
@@ -141,7 +141,7 @@ async function requestWithdraw() {
 
 async function claimCooldown() {
   const args = process.argv.slice(2);
-  const tranche = (parseFlag(args, "--tranche") ?? "SENIOR").toUpperCase() as TrancheId;
+  const tranche = parseTranche(parseFlag(args, "--tranche") ?? "SENIOR");
   const cooldownId = parseFlag(args, "--cooldown-id");
   const dryRun = hasFlag(args, "--dry-run");
 
@@ -169,7 +169,7 @@ async function claimCooldown() {
   if (!target) throw new Error(`Cooldown #${cooldownId} not found or not claimable`);
 
   const vaultAddr = (
-    tranche === "SENIOR" ? addresses.seniorVault : tranche === "MEZZ" ? addresses.mezzVault : addresses.juniorVault
+    tranche === TrancheId.SENIOR ? addresses.seniorVault : tranche === TrancheId.MEZZ ? addresses.mezzVault : addresses.juniorVault
   ) as `0x${string}`;
 
   console.log(`  Claiming #${cooldownId}...`);
@@ -191,7 +191,7 @@ async function claimCooldown() {
 
 async function claimShares() {
   const args = process.argv.slice(2);
-  const tranche = (parseFlag(args, "--tranche") ?? "SENIOR").toUpperCase() as TrancheId;
+  const tranche = parseTranche(parseFlag(args, "--tranche") ?? "SENIOR");
   const cooldownId = parseFlag(args, "--cooldown-id");
   const dryRun = hasFlag(args, "--dry-run");
 
@@ -208,7 +208,7 @@ async function claimShares() {
   }
 
   const vaultAddr = (
-    tranche === "SENIOR" ? addresses.seniorVault : tranche === "MEZZ" ? addresses.mezzVault : addresses.juniorVault
+    tranche === TrancheId.SENIOR ? addresses.seniorVault : tranche === TrancheId.MEZZ ? addresses.mezzVault : addresses.juniorVault
   ) as `0x${string}`;
 
   console.log(`  Claiming shares cooldown #${cooldownId}...`);

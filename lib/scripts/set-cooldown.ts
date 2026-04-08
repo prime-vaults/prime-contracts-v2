@@ -13,8 +13,7 @@
  */
 
 import { type Hash } from "viem";
-import { createSDK, createWallet, waitForTx, parseFlag } from "./config";
-import type { TrancheId } from "../types";
+import { createSDK, createWallet, waitForTx, parseFlag, parseTranche } from "./config";
 
 const REDEMPTION_POLICY_ABI = [
   {
@@ -52,8 +51,6 @@ const REDEMPTION_POLICY_ABI = [
   },
 ] as const;
 
-const TRANCHE_NUM: Record<string, number> = { SENIOR: 0, MEZZ: 1, JUNIOR: 2 };
-
 function parseDuration(input: string): bigint {
   const match = input.match(/^(\d+)(d|h|m|s)?$/);
   if (!match) throw new Error(`Invalid duration: ${input}. Use: 3d, 12h, 30m, 300s, or 300`);
@@ -73,13 +70,12 @@ function fmtDur(seconds: bigint): string {
 
 async function main() {
   const args = process.argv.slice(2);
-  const tranche = (parseFlag(args, "--tranche") ?? "").toUpperCase() as TrancheId;
+  const trancheStr = parseFlag(args, "--tranche");
+  if (!trancheStr) throw new Error("--tranche required: SENIOR, MEZZ, or JUNIOR");
+  const tranche = parseTranche(trancheStr);
   const assetsLockStr = parseFlag(args, "--assets-lock");
   const sharesLockStr = parseFlag(args, "--shares-lock");
 
-  if (!["SENIOR", "MEZZ", "JUNIOR"].includes(tranche)) {
-    throw new Error("--tranche required: SENIOR, MEZZ, or JUNIOR");
-  }
   if (!assetsLockStr && !sharesLockStr) {
     throw new Error("At least one of --assets-lock or --shares-lock required");
   }
@@ -87,7 +83,7 @@ async function main() {
   const { publicClient, addresses } = createSDK();
   const { account, walletClient } = createWallet();
   const rpAddr = addresses.redemptionPolicy as `0x${string}`;
-  const trancheNum = TRANCHE_NUM[tranche];
+  const trancheNum = tranche as number;
 
   // Read current config
   const current = await publicClient.readContract({

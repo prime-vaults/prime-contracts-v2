@@ -1,9 +1,15 @@
-export type TrancheId = "SENIOR" | "MEZZ" | "JUNIOR";
+import { Chain } from "viem";
+
+export enum TrancheId {
+  SENIOR,
+  MEZZ,
+  JUNIOR,
+}
 
 export interface PrimeVaultsConfig {
   rpcUrl: string;
-  chainId: number;
   addresses: ContractAddresses;
+  chain: Chain;
 }
 
 export interface ContractAddresses {

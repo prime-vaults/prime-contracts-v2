@@ -7,22 +7,25 @@
  */
 
 import { parseUnits, formatUnits, type Hash } from "viem";
-import { createSDK, createWallet, waitForTx, parseFlag, hasFlag, USDAI } from "./config";
+import { createSDK, createWallet, waitForTx, parseFlag, hasFlag, parseTranche, USDAI } from "./config";
 import { TRANCHE_VAULT_ABI, ERC20_ABI } from "../abis";
-import type { TrancheId } from "../types";
+import { TrancheId } from "../types";
+
+const UINT256_MAX = 2n ** 256n - 1n;
 
 function fmtPct(val: bigint): string {
-  return `${(Number(val) / 1e16).toFixed(2)}%`;
+  if (val >= UINT256_MAX) return "∞";
+  return `${Number(formatUnits(val, 16)).toFixed(2)}%`;
 }
 
 async function main() {
   const args = process.argv.slice(2);
-  const tranche = (parseFlag(args, "--tranche") ?? "SENIOR").toUpperCase() as TrancheId;
+  const tranche = parseTranche(parseFlag(args, "--tranche") ?? "SENIOR");
   const amount = parseFlag(args, "--amount") ?? "1";
   const dryRun = hasFlag(args, "--dry-run");
 
-  if (!["SENIOR", "MEZZ"].includes(tranche)) {
-    throw new Error(`Invalid tranche: ${tranche}. Use SENIOR or MEZZ (Junior uses deposit-junior-flow.ts)`);
+  if (tranche === TrancheId.JUNIOR) {
+    throw new Error("Junior uses deposit-junior-flow.ts");
   }
 
   const { sdk, publicClient, addresses } = createSDK();
@@ -45,6 +48,7 @@ async function main() {
 
   // 3. Protocol health
   const health = await sdk.getProtocolHealth();
+  console.table(health);
   console.log(`  Coverage Sr: ${fmtPct(health.coverageSenior)} | Mz: ${fmtPct(health.coverageMezz)}`);
   if (health.shortfallPaused) throw new Error("Protocol is shortfall paused");
 
@@ -54,7 +58,7 @@ async function main() {
   }
 
   // 4. Approve if needed
-  const vaultAddr = tranche === "SENIOR" ? addresses.seniorVault : addresses.mezzVault;
+  const vaultAddr = tranche === TrancheId.SENIOR ? addresses.seniorVault : addresses.mezzVault;
   const allowance = await sdk.getTokenAllowance(USDAI, user, vaultAddr);
   if (allowance < depositAmount) {
     console.log(`\n  Approving USD.AI...`);

@@ -7,6 +7,7 @@ import { createWalletClient, createPublicClient, http, type Hash, type PublicCli
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum } from "viem/chains";
 import { PrimeVaultsSDK } from "../PrimeVaultsSDK";
+import { TrancheId } from "../types";
 import type { ContractAddresses } from "../types";
 import "dotenv/config";
 
@@ -32,7 +33,7 @@ export function createSDK() {
   const rpcUrl = requireEnv("ARB_RPC_URL");
   const addresses = loadDeployedAddresses();
 
-  const sdk = new PrimeVaultsSDK({ rpcUrl, chainId: 42161, addresses });
+  const sdk = new PrimeVaultsSDK({ rpcUrl, chain: arbitrum, addresses });
   const publicClient = createPublicClient({ chain: arbitrum, transport: http(rpcUrl) });
 
   return { sdk, publicClient, rpcUrl, addresses };
@@ -63,6 +64,18 @@ export function hasFlag(args: string[], flag: string): boolean {
   return args.includes(flag);
 }
 
+const TRANCHE_NAME_MAP: Record<string, TrancheId> = {
+  SENIOR: TrancheId.SENIOR,
+  MEZZ: TrancheId.MEZZ,
+  JUNIOR: TrancheId.JUNIOR,
+};
+
+export function parseTranche(str: string): TrancheId {
+  const result = TRANCHE_NAME_MAP[str.toUpperCase()];
+  if (result === undefined) throw new Error(`Invalid tranche: ${str}. Use SENIOR, MEZZ, or JUNIOR`);
+  return result;
+}
+
 /**
  * # Dashboard (chỉ cần RPC, không cần key)                                             
   npx tsx lib/scripts/dashboard.ts                                                     
@@ -91,6 +104,5 @@ export function hasFlag(args: string[], flag: string): boolean {
   npx tsx lib/scripts/set-cooldown.ts --handler shares --duration 7d                   
                                                                                        
   # Set to 0 for testing (instant claim)                                               
-  npx tsx lib/scripts/set-cooldown.ts --handler erc20 --duration 0s                    
-  npx tsx lib/scripts/set-cooldown.ts --handler shares --duration 0s  
+  npx tsx lib/scripts/set-cooldown.ts --tranche JUNIOR --assets-lock 0s --shares-lock 0s
  */

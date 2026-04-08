@@ -12,6 +12,7 @@
 import { parseUnits, formatUnits, type Hash } from "viem";
 import { createSDK, createWallet, waitForTx, parseFlag, hasFlag, USDAI, WETH } from "./config";
 import { TRANCHE_VAULT_ABI, ERC20_ABI } from "../abis";
+import { TrancheId } from "../types";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -88,8 +89,23 @@ async function main() {
   }
 
   // 6. Deposit
-  const sharesBefore = await sdk.getShareBalance("JUNIOR", user);
+  const sharesBefore = await sdk.getShareBalance(TrancheId.JUNIOR, user);
   console.log(`  Depositing into Junior...`);
+  // Simulate first to get clear revert reason
+  try {
+    await publicClient.simulateContract({
+      address: juniorVault,
+      abi: TRANCHE_VAULT_ABI,
+      functionName: "depositJunior",
+      args: [baseAmount, estimate.wethNeeded, user],
+      account: account.address,
+    });
+  } catch (err: any) {
+    console.error(`\n  Simulation failed:`);
+    console.error(`  ${err.shortMessage ?? err.message}\n`);
+    throw err;
+  }
+
   const hash = await walletClient.writeContract({
     address: juniorVault,
     abi: TRANCHE_VAULT_ABI,
@@ -101,7 +117,7 @@ async function main() {
   await waitForTx(publicClient, hash as Hash, "DepositJunior");
 
   // 7. Verify
-  const sharesAfter = await sdk.getShareBalance("JUNIOR", user);
+  const sharesAfter = await sdk.getShareBalance(TrancheId.JUNIOR, user);
   console.log(`\n  Shares received: ${formatUnits(sharesAfter - sharesBefore, 18)}`);
   console.log(`  Done.\n`);
 }

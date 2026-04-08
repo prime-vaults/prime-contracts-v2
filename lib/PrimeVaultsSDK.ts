@@ -1,10 +1,9 @@
 import { createPublicClient, http, type PublicClient, type Address } from "viem";
 import { PRIME_LENS_ABI, TRANCHE_VAULT_ABI, ACCOUNTING_ABI, PRIME_CDO_ABI, ERC20_ABI } from "./abis";
-import { CooldownType } from "./types";
+import { CooldownType, TrancheId } from "./types";
 import type {
   PrimeVaultsConfig,
   ContractAddresses,
-  TrancheId,
   TrancheInfo,
   JuniorTrancheInfo,
   PreviewDeposit,
@@ -16,7 +15,6 @@ import type {
   UserPortfolio,
 } from "./types";
 
-const TRANCHE_MAP: Record<TrancheId, number> = { SENIOR: 0, MEZZ: 1, JUNIOR: 2 };
 const PRECISION = 10n ** 18n;
 
 export class PrimeVaultsSDK {
@@ -28,8 +26,9 @@ export class PrimeVaultsSDK {
     this.config = config;
     this.addresses = config.addresses;
     this.publicClient = createPublicClient({
+      chain: config.chain,
       transport: http(config.rpcUrl),
-    });
+    }) as PublicClient;
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -41,9 +40,9 @@ export class PrimeVaultsSDK {
    * For Junior-specific data (WETH, ratio, etc.), use getJuniorTranche() instead.
    */
   async getTrancheById(trancheId: TrancheId): Promise<TrancheInfo> {
-    const trancheNum = TRANCHE_MAP[trancheId];
     const vaultAddr = this._getVaultAddress(trancheId);
-    const aprFn = trancheId === "SENIOR" ? "getSeniorAPR" : trancheId === "MEZZ" ? "getMezzAPR" : "getJuniorAPR";
+    const aprFn =
+      trancheId === TrancheId.SENIOR ? "getSeniorAPR" : trancheId === TrancheId.MEZZ ? "getMezzAPR" : "getJuniorAPR";
 
     const results = await this.publicClient.multicall({
       contracts: [
@@ -51,7 +50,7 @@ export class PrimeVaultsSDK {
           address: this.addresses.primeLens as Address,
           abi: PRIME_LENS_ABI,
           functionName: "getTrancheInfo",
-          args: [trancheNum],
+          args: [trancheId],
         },
         { address: this.addresses.accounting as Address, abi: ACCOUNTING_ABI, functionName: aprFn },
         { address: vaultAddr as Address, abi: TRANCHE_VAULT_ABI, functionName: "asset" },
@@ -84,7 +83,7 @@ export class PrimeVaultsSDK {
    * For Junior, use previewJuniorDeposit() instead.
    */
   async previewDeposit(trancheId: TrancheId, amount: bigint): Promise<PreviewDeposit> {
-    if (trancheId === "JUNIOR") throw new Error("Use previewJuniorDeposit() for Junior");
+    if (trancheId === TrancheId.JUNIOR) throw new Error("Use previewJuniorDeposit() for Junior");
 
     const vaultAddr = this._getVaultAddress(trancheId);
     const results = await this.publicClient.multicall({
@@ -134,7 +133,7 @@ export class PrimeVaultsSDK {
     const wethRatio = totalBaseValue > 0n ? (wethValueUSD * PRECISION) / totalBaseValue : 0n;
 
     return {
-      trancheId: "JUNIOR",
+      trancheId: TrancheId.JUNIOR,
       shares,
       sharePrice,
       totalBaseValue,
@@ -177,7 +176,7 @@ export class PrimeVaultsSDK {
    * @param shares Vault shares to redeem (18 decimals)
    */
   async previewWithdraw(trancheId: TrancheId, shares: bigint): Promise<PreviewWithdraw> {
-    const trancheNum = TRANCHE_MAP[trancheId];
+    const trancheNum = trancheId as number;
     const vaultAddr = this._getVaultAddress(trancheId);
 
     const contracts: any[] = [
@@ -193,7 +192,7 @@ export class PrimeVaultsSDK {
     ];
 
     // Junior: also fetch WETH position for proportional calc
-    if (trancheId === "JUNIOR") {
+    if (trancheId === TrancheId.JUNIOR) {
       contracts.push(
         { address: this.addresses.primeLens as Address, abi: PRIME_LENS_ABI, functionName: "getJuniorPosition" },
         { address: vaultAddr as Address, abi: TRANCHE_VAULT_ABI, functionName: "totalSupply" },
@@ -216,7 +215,7 @@ export class PrimeVaultsSDK {
     let wethAmount = 0n;
     let wethValueUSD = 0n;
 
-    if (trancheId === "JUNIOR" && results.length > 3) {
+    if (trancheId === TrancheId.JUNIOR && results.length > 3) {
       const pos = results[2].status === "success" ? (results[2].result as any) : null;
       const totalSupply = results[3].status === "success" ? (results[3].result as bigint) : 0n;
 
@@ -410,8 +409,8 @@ export class PrimeVaultsSDK {
   // ═══════════════════════════════════════════════════════════════════
 
   private _getVaultAddress(trancheId: TrancheId): string {
-    if (trancheId === "SENIOR") return this.addresses.seniorVault;
-    if (trancheId === "MEZZ") return this.addresses.mezzVault;
+    if (trancheId === TrancheId.SENIOR) return this.addresses.seniorVault;
+    if (trancheId === TrancheId.MEZZ) return this.addresses.mezzVault;
     return this.addresses.juniorVault;
   }
 
@@ -467,7 +466,7 @@ export class PrimeVaultsSDK {
     const pos = posResult.result as any;
 
     return {
-      trancheId: "JUNIOR",
+      trancheId: TrancheId.JUNIOR,
       vault: info.vault,
       name: info.name,
       symbol: info.symbol,

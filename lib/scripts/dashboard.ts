@@ -8,7 +8,7 @@
 
 import { formatUnits } from "viem";
 import { createSDK, parseFlag } from "./config";
-import { CooldownType } from "../types";
+import { CooldownType, TrancheId } from "../types";
 
 const MECHANISM_NAMES: Record<number, string> = {
   [CooldownType.NONE]: "NONE (instant)",
@@ -20,7 +20,10 @@ function fmtUSD(val: bigint): string {
   return `$${formatUnits(val, 18)}`;
 }
 
+const UINT256_MAX = 2n ** 256n - 1n;
+
 function fmtPct(val: bigint): string {
+  if (val >= UINT256_MAX) return "∞";
   return `${(Number(val) / 1e16).toFixed(2)}%`;
 }
 
@@ -40,7 +43,7 @@ async function main() {
   console.log(`\n  Tranches`);
   console.log(`  ───────────────────────────────────`);
 
-  for (const id of ["SENIOR", "MEZZ"] as const) {
+  for (const id of [TrancheId.SENIOR, TrancheId.MEZZ]) {
     const t = await sdk.getTrancheById(id);
     console.log(
       `  ${id}: ${t.symbol} | assets=${fmtUSD(t.totalAssets)} | supply=${formatUnits(t.totalSupply, 18)} | price=${formatUnits(t.sharePrice, 18)} | APR=${fmtPct(t.apr)}`,
@@ -69,7 +72,7 @@ async function main() {
 
   console.log(`\n  Withdraw Conditions`);
   console.log(`  ───────────────────────────────────`);
-  for (const id of ["SENIOR", "MEZZ", "JUNIOR"] as const) {
+  for (const id of [TrancheId.SENIOR, TrancheId.MEZZ, TrancheId.JUNIOR]) {
     const w = await sdk.previewWithdraw(id, 10n ** 18n);
     const mech = MECHANISM_NAMES[w.mechanism] ?? String(w.mechanism);
     const fee = `${Number(w.feeBps) / 100}%`;
